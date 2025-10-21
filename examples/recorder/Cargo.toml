@@ -1,0 +1,14 @@
+[package]
+name = "recorder"
+version = "0.1.0"
+edition = "2024"
+license = "0bsd"
+
+[lib]
+name = "recorder"
+crate-type = ["cdylib"]
+
+[dependencies]
+dice-rs = { version = "0.1", path = "../../dice-rs" }
+ctor = "0.6.0"
+log = "0.4.28"

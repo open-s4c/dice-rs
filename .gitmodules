@@ -1,0 +1,3 @@
+[submodule "dice"]
+	path = dice
+	url = git@github.com:open-s4c/dice.git
