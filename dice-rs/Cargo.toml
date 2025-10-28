@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 links = "dice"
 build = "build.rs"
-description = "dice-rs"
+description = "rust bindings for dice"
 license = "0bsd"
 
 [features]

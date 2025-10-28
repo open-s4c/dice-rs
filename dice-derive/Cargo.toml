@@ -2,6 +2,8 @@
 name = "dice-derive"
 version = "0.1.0"
 edition = "2024"
+description = "proc macro for dice-rs"
+license = "0bsd"
 
 [lib]
 proc-macro = true
