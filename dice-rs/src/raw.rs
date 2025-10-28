@@ -12,7 +12,7 @@ pub type PsCallbackF = Option<
 
 unsafe extern "C" {
     pub fn ps_subscribe(chain: Chain, ty: TypeId, cb: PsCallbackF, prio: i32) -> i32;
-
+    pub fn ps_publish(chain: Chain, ty: TypeId, event: *const c_void, md: *mut Metadata) -> i32;
 }
 
 pub mod thread {
