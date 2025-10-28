@@ -4,7 +4,8 @@ use std::sync::{
 };
 
 use dice_rs::{
-    events::*, init_dice_state, subscribe, thread::*, tls_key, Chain, DiceEvent, DiceResult, DiceThreadId, MempoolAllocator, Metadata, TypeId
+    Chain, DiceEvent, DiceResult, DiceThreadId, Metadata, TypeId, events::*, init_dice_state,
+    subscribe, thread::*, tls_key,
 };
 use std::sync::atomic::Ordering;
 

@@ -191,11 +191,11 @@ macro_rules! subscribe {
 macro_rules! init_dice_state {
     () => {
         #[global_allocator]
-        static GLOBAL: MempoolAllocator = MempoolAllocator;
+        static GLOBAL: $crate::MempoolAllocator = $crate::MempoolAllocator;
 
         #[::ctor::ctor]
         fn __init_log() {
-            dice_rs::log::init(log::LevelFilter::Debug);
+            $crate::log::init(log::LevelFilter::Debug);
         }
-    }
+    };
 }
