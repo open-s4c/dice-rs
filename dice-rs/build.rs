@@ -21,35 +21,28 @@ fn build_dice() {
         fs::create_dir_all(&lib_path).expect("Failed to create 'lib' directory");
     }
 
-    let object_targets  = vec![
-        #[cfg(feature = "dice")]
-        "dice.o",
-        #[cfg(feature = "dice-box")]
-        "dice-box.o",
-        #[cfg(feature = "dice-cxa")]
-        "dice-cxa.o",
-        #[cfg(feature = "dice-dispatch")]
-        "dice-dispatch.o",
-        #[cfg(feature = "dice-malloc")]
-        "dice-malloc.o",
-        #[cfg(feature = "dice-memcpy")]
-        "dice-memcpy.o",
-        #[cfg(feature = "dice-mman")]
-        "dice-mman.o",
-        #[cfg(feature = "dice-pthread_cond")]
-        "dice-pthread_cond.o",
-        #[cfg(feature = "dice-pthread_create")]
-        "dice-pthread_create.o",
-        #[cfg(feature = "dice-pthread_mutex")]
-        "dice-pthread_mutex.o",
-        #[cfg(feature = "dice-pthread_rwlock")]
-        "dice-pthread_rwlock.o",
-        #[cfg(feature = "dice-self")]
-        "dice-self.o",
-        #[cfg(feature = "dice-sem")]
-        "dice-sem.o",
-        #[cfg(feature = "dice-tsan")]
-        "dice-tsan.o"];
+    let object_features  = vec![
+        "dice",
+        "dice-box",
+        "dice-cxa",
+        "dice-dispatch",
+        "dice-malloc",
+        "dice-memcpy",
+        "dice-mman",
+        "dice-pthread_cond",
+        "dice-pthread_create",
+        "dice-pthread_mutex",
+        "dice-pthread_rwlock",
+        "dice-self",
+        "dice-sem",
+        "dice-tsan"];
+
+    // filter enabled features
+    let object_targets = object_features
+        .iter()
+        .filter(|feature| env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_ascii_uppercase()).is_some())
+        .map(|feature| feature.to_owned().to_owned() + ".o")
+        .collect::<Vec<String>>();
 
     // clean cmake build
     cfg.build_target("clean").build();
@@ -64,8 +57,8 @@ fn build_dice() {
 
     // find all object file paths in cmake build directory
     let object_paths : Vec<PathBuf> = maybe_cmake_out_dir
-        .iter()
         .map(|dst| dst.join("build"))
+        .iter()
         .flat_map(|lib_dir| WalkDir::new(lib_dir).into_iter())
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path().to_owned())
@@ -79,6 +72,7 @@ fn build_dice() {
 
     // pack object files into static library
     let mut builder = GnuBuilder::new(File::create(&dice_path).expect("could not create libdice.a"), object_file_names);
+
     object_paths
         .iter()
         .for_each(|object| builder.append_path(object).expect("could not add object to archive"));
@@ -155,10 +149,15 @@ fn config_dice() -> cmake::Config {
         cfg.define("DICE_SANITIZER", "");
     }
 
-    env::var("DICE_C_COMPILER").iter()
-        .for_each(|cc| { cfg.define("CMAKE_C_COMPILER", cc); });
-    env::var("DICE_CXX_COMPILER").iter()
-        .for_each(|cc| { cfg.define("CMAKE_CXX_COMPILER", cc); });
+    let cmake_env_vars = vec![
+        ("DICE_C_COMPILER", "CMAKE_C_COMPILER"),
+        ("DICE_CXX_COMPILER", "CMAKE_CXX_COMPILER"),
+    ];
+
+    cmake_env_vars
+        .iter()
+        .flat_map(|(env_var, cmake_var)| env::var(env_var).map(|env_var| (env_var, cmake_var)))
+        .for_each(|(env_var, cmake_var)| { cfg.define(cmake_var, env_var); });
 
     cfg
 }
