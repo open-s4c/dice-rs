@@ -7,11 +7,14 @@ build = "build.rs"
 description = "rust bindings for dice"
 license = "0bsd"
 
+[lib]
+crate-type = ["rlib", "staticlib"]
+
 [features]
-default = ["lto"]
+default = ["lto", "dice"]
 
 interpose-memcpy = []
-lto = []
+lto = ["dice-dispatch", "dice-box"]
 
 log-fatal = []
 log-info  = []
@@ -21,6 +24,22 @@ san-thread = []
 san-address = []
 san-undefined = []
 
+# Dice modules
+dice = []
+dice-box = ["dice"]
+dice-cxa = ["dice"]
+dice-dispatch = ["dice"]
+dice-malloc = ["dice"]
+dice-memcpy = ["dice"]
+dice-mman = ["dice"]
+dice-pthread_cond = ["dice"]
+dice-pthread_create = ["dice"]
+dice-pthread_mutex = ["dice"]
+dice-pthread_rwlock = ["dice"]
+dice-self = ["dice"]
+dice-sem = ["dice"]
+dice-tsan = ["dice"]
+
 [dependencies]
 dice-derive = { version = "0.1", path = "../dice-derive" }
 libc = "0.2.177"
@@ -29,6 +48,6 @@ log = "0.4.28"
 
 [build-dependencies]
 cmake = "0.1.54"
-bindgen = "0.72.1"
-heck = "0.5.0" 
 cc = "1.2.41"
+walkdir = "2.5.0"
+ar = "0.9.0"
