@@ -13,6 +13,8 @@ fn build_dice() {
 
     let mut cfg = config_dice();
 
+    cfg.build_target("clean").build();
+
     let build_path = env::var("OUT_DIR").expect("OUT_DIR not set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
     let dice_path = lib_path.join("libdice.a");
