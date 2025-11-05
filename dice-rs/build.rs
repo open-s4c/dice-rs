@@ -8,12 +8,10 @@ fn main() {
 }
 
 fn build_dice() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
 
     let mut cfg = config_dice();
-
-    cfg.build_target("clean").build();
 
     let build_path = env::var("OUT_DIR").expect("OUT_DIR not set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
@@ -53,12 +51,19 @@ fn build_dice() {
         #[cfg(feature = "dice-tsan")]
         "dice-tsan.o"];
 
-    let object_paths : Vec<PathBuf> = object_targets
+    // clean cmake build
+    cfg.build_target("clean").build();
+
+    // build all cmake targets and get the cmake directory if any built
+    let maybe_cmake_out_dir = object_targets
         .iter()
         .map(|objlib| cfg.build_target(objlib).build())
         .collect::<Vec<PathBuf>>()
-        .iter()
-        .next()
+        .into_iter()
+        .next();
+
+    // find all object file paths in cmake build directory
+    let object_paths : Vec<PathBuf> = maybe_cmake_out_dir
         .iter()
         .map(|dst| dst.join("build"))
         .flat_map(|lib_dir| WalkDir::new(lib_dir).into_iter())
@@ -67,17 +72,18 @@ fn build_dice() {
         .filter(|path| path.extension().map(|ext| ext == "o").unwrap_or(false))
         .collect();
 
+    // get object file names
     let object_file_names : Vec<Vec<u8>> = object_paths.iter()
-        .map(|path| path.file_name().unwrap().to_str().unwrap().to_string())
-        .map(|file_name| file_name.as_bytes().to_vec())
+        .map(|path| path.file_name().expect("object path must have a filename").as_encoded_bytes().to_vec())
         .collect();
 
-    let mut builder = GnuBuilder::new(File::create(&dice_path).unwrap(), object_file_names);
-
+    // pack object files into static library
+    let mut builder = GnuBuilder::new(File::create(&dice_path).expect("could not create libdice.a"), object_file_names);
     object_paths
         .iter()
         .for_each(|object| builder.append_path(object).expect("could not add object to archive"));
 
+    // add symbol index
     Command::new("ranlib")
         .arg(&dice_path)
         .status()
@@ -85,6 +91,7 @@ fn build_dice() {
 
     let output_dir = Path::new(&build_path).join("..").join("..").join("..").join("libtsano.so");
 
+    // build libtsano.o and copy it to the root output directory
     WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
         .filter_map(|entry| entry.ok())
@@ -102,7 +109,7 @@ fn build_dice() {
 }
 
 fn config_dice() -> cmake::Config {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
     let mut cfg = cmake::Config::new(&dice_src);
 
@@ -157,7 +164,7 @@ fn config_dice() -> cmake::Config {
 }
 
 fn build_shim() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
 
     let shim_dir = manifest_dir.join("glue");
@@ -193,4 +200,8 @@ fn build_shim() {
         "cargo:rerun-if-changed={}",
         dice_src.join("include").display()
     )
+}
+
+fn get_manifest_dir() -> PathBuf {
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("could not get Cargo manifest directory"))
 }
