@@ -89,7 +89,7 @@ fn build_dice() {
     WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
         .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_name().to_str().map(|filename| filename == "libtsano.so").unwrap_or(false))
+        .filter(|entry| entry.file_name().to_str() == Some("libtsano.so"))
         .map(|entry| entry.into_path())
         .for_each(|path| { fs::copy(path, &output_dir).expect("could not copy libtsano.so"); });
 
