@@ -40,7 +40,7 @@ fn build_dice() {
     // filter enabled features
     let object_targets = object_features
         .iter()
-        .filter(|feature| env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_ascii_uppercase()).is_some())
+        .filter(|feature| env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_uppercase().replace('-', "_")).is_some())
         .map(|feature| feature.to_owned().to_owned() + ".o")
         .collect::<Vec<String>>();
 
@@ -94,11 +94,6 @@ fn build_dice() {
         .for_each(|path| { fs::copy(path, &output_dir).expect("could not copy libtsano.so"); });
 
     println!("cargo:rustc-link-search={}", lib_path.display());
-
-    if cfg!(target_env = "gnu") {
-        println!("cargo:rustc-link-lib=stdc++");
-    }
-
     println!("cargo:rerun-if-changed={}", dice_src.display());
 }
 
