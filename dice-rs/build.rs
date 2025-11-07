@@ -1,25 +1,24 @@
 use ar::GnuBuilder;
-use std::{env, fs::{self, File}, path::Path, path::PathBuf, process::Command};
-use walkdir::WalkDir;
+use std::{env, error::Error, fmt, fs::{self, File}, path::Path, path::PathBuf, process::Command};
+use walkdir::{WalkDir, DirEntry};
 
-fn main() {
-    build_dice();
-    build_shim();
+fn main() -> Result<(), Box<dyn Error>> {
+    build_dice()?;
+    build_shim()?;
+    Ok(())
 }
 
-fn build_dice() {
+fn build_dice() -> Result<(), Box<dyn Error>> {
     let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
 
     let mut cfg = config_dice();
 
-    let build_path = env::var("OUT_DIR").expect("OUT_DIR not set by Cargo");
+    let build_path = env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
     let dice_path = lib_path.join("libdice.a");
 
-    if !lib_path.exists() {
-        fs::create_dir_all(&lib_path).expect("Failed to create 'lib' directory");
-    }
+    fs::create_dir_all(&lib_path)?;
 
     let object_features  = vec![
         "dice",
@@ -39,62 +38,69 @@ fn build_dice() {
 
     // filter enabled features
     let object_targets = object_features
-        .iter()
+        .into_iter()
         .filter(|feature| env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_uppercase().replace('-', "_")).is_some())
-        .map(|feature| feature.to_owned().to_owned() + ".o")
+        .map(|feature| feature.to_owned() + ".o")
         .collect::<Vec<String>>();
 
     // clean cmake build
     cfg.build_target("clean").build();
 
     // build all cmake targets and get the cmake directory if any built
-    let maybe_cmake_out_dir = object_targets
-        .iter()
-        .map(|objlib| cfg.build_target(objlib).build())
-        .collect::<Vec<PathBuf>>()
-        .into_iter()
-        .next();
+    let mut maybe_cmake_out_dir = None;
+    for target in object_targets {
+        maybe_cmake_out_dir = Some(cfg.build_target(&target).build());
+    }
 
     // find all object file paths in cmake build directory
     let object_paths : Vec<PathBuf> = maybe_cmake_out_dir
         .map(|dst| dst.join("build"))
-        .iter()
-        .flat_map(|lib_dir| WalkDir::new(lib_dir).into_iter())
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path().to_owned())
+        .map(WalkDir::new)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(DirEntry::into_path)
         .filter(|path| path.extension().map(|ext| ext == "o").unwrap_or(false))
         .collect();
 
     // get object file names
-    let object_file_names : Vec<Vec<u8>> = object_paths.iter()
+    let object_file_names = object_paths.iter()
         .map(|path| path.file_name().expect("object path must have a filename").as_encoded_bytes().to_vec())
         .collect();
 
     // pack object files into static library
-    let mut builder = GnuBuilder::new(File::create(&dice_path).expect("could not create libdice.a"), object_file_names);
+    let dice_file = File::create(&dice_path)?;
+
+    let mut builder = GnuBuilder::new(dice_file, object_file_names);
 
     object_paths
-        .iter()
-        .for_each(|object| builder.append_path(object).expect("could not add object to archive"));
+        .into_iter()
+        .map(|object| builder.append_path(object))
+        .reduce(Result::and)
+        .unwrap_or(Ok(()))?;
 
     // add symbol index
     Command::new("ranlib")
         .arg(&dice_path)
-        .status()
-        .expect("Failed to run ranlib");
+        .status()?;
 
     let output_dir = Path::new(&build_path).join("..").join("..").join("..").join("libtsano.so");
 
     // build libtsano.o and copy it to the root output directory
-    WalkDir::new(cfg.build_target("tsano").build())
+    let _ = WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.file_name().to_str() == Some("libtsano.so"))
-        .map(|entry| entry.into_path())
-        .for_each(|path| { fs::copy(path, &output_dir).expect("could not copy libtsano.so"); });
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_str().into_iter().any(|name| name == "libtsano.so"))
+        .map(DirEntry::into_path)
+        .map(|path| fs::copy(path, &output_dir))
+        .reduce(Result::and)
+        .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })?;
+
 
     println!("cargo:rustc-link-search={}", lib_path.display());
     println!("cargo:rerun-if-changed={}", dice_src.display());
+
+    Ok(())
 }
 
 fn config_dice() -> cmake::Config {
@@ -102,7 +108,7 @@ fn config_dice() -> cmake::Config {
     let dice_src = manifest_dir.join("..").join("dice");
     let mut cfg = cmake::Config::new(&dice_src);
 
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".into());
+    let profile = env::var("PROFILE").unwrap_or("debug".into());
     let build_type = if profile == "release" {
         "Release"
     } else {
@@ -150,14 +156,14 @@ fn config_dice() -> cmake::Config {
     ];
 
     cmake_env_vars
-        .iter()
+        .into_iter()
         .flat_map(|(env_var, cmake_var)| env::var(env_var).map(|env_var| (env_var, cmake_var)))
         .for_each(|(env_var, cmake_var)| { cfg.define(cmake_var, env_var); });
 
     cfg
 }
 
-fn build_shim() {
+fn build_shim() -> Result<(), Box<dyn Error>> {
     let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
 
@@ -193,9 +199,24 @@ fn build_shim() {
     println!(
         "cargo:rerun-if-changed={}",
         dice_src.join("include").display()
-    )
+    );
+
+    Ok(())
 }
 
 fn get_manifest_dir() -> PathBuf {
-    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("could not get Cargo manifest directory"))
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("Cargo manifest directory must be accessible"))
 }
+
+#[derive(Debug, Clone)]
+struct FileNotFoundError {
+    filename: String,
+}
+
+impl fmt::Display for FileNotFoundError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "file not found: {}", self.filename)
+    }
+}
+
+impl Error for FileNotFoundError {}
