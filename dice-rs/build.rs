@@ -90,12 +90,11 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     let _ = WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
         .filter_map(Result::ok)
-        .filter(|entry| entry.file_name().to_str().into_iter().any(|name| name == "libtsano.so"))
+        .filter(|entry| entry.file_name().to_str().into_iter().any(|name| name == "libtsano.so" || name == "libtsano.dylib"))
+        .next()
+        .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })
         .map(DirEntry::into_path)
-        .map(|path| fs::copy(path, &output_dir))
-        .reduce(Result::and)
-        .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })?;
-
+        .map(|path| fs::copy(path, &output_dir))?;
 
     println!("cargo:rustc-link-search={}", lib_path.display());
     println!("cargo:rerun-if-changed={}", dice_src.display());
