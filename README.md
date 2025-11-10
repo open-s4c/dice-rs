@@ -12,12 +12,12 @@ rust wrapper for dice
 2. build crate
 3. run
 
-build and run the replay example
+build and run the record example
 ```
 gcc -std=c11 -O1 -g -pthread -fsanitize=thread tests/atomic_stable.c -o tests/atomic_stable
 
 cargo build && clear && TSANO_LIBDIR=dice/build/deps/tsano/ ./dice/deps/tsano/tsano LD_PRELOAD=dice/build/src/dice/libdice.so:dice/build/src/mod/dice-malloc.so:dice/build/src/mod/dice-pthread_create.so:dice/build/src/mod/dice-self.so:dice/build/src/mod/dice
--tsan.so:target/debug/libreplay.so ./tests/atomic_stable
+-tsan.so:target/debug/librecorder.so ./tests/atomic_stable
 ```
 
 ## build dice
