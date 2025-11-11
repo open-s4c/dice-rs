@@ -49,6 +49,8 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     // build all cmake targets and get the cmake directory if any built
     let mut maybe_cmake_out_dir = None;
     for target in object_targets {
+        let cmake_out_dir = cfg.build_target(&target).build();
+        assert!(maybe_cmake_out_dir.into_iter().all(|old_cmake_out_dir| old_cmake_out_dir == cmake_out_dir));
         maybe_cmake_out_dir = Some(cfg.build_target(&target).build());
     }
 
@@ -60,7 +62,7 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         .flatten()
         .filter_map(Result::ok)
         .map(DirEntry::into_path)
-        .filter(|path| path.extension().map(|ext| ext == "o").unwrap_or(false))
+        .filter(|path| path.extension().into_iter().any(|ext| ext == "o"))
         .collect();
 
     // get object file names
@@ -157,7 +159,7 @@ fn config_dice() -> cmake::Config {
     cmake_env_vars
         .into_iter()
         .flat_map(|(env_var, cmake_var)| env::var(env_var).map(|env_var| (env_var, cmake_var)))
-        .for_each(|(env_var, cmake_var)| { cfg.define(cmake_var, env_var); });
+        .for_each(|(env_var_val, cmake_var)| { cfg.define(cmake_var, env_var_val); });
 
     cfg
 }
@@ -204,7 +206,7 @@ fn build_shim() -> Result<(), Box<dyn Error>> {
 }
 
 fn get_manifest_dir() -> PathBuf {
-    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("Cargo manifest directory must be accessible"))
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("Cargo sets this environment variable"))
 }
 
 #[derive(Debug, Clone)]
