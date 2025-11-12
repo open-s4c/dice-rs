@@ -171,7 +171,7 @@ fn config_dice() -> cmake::Config {
 
     cmake_env_vars
         .into_iter()
-        .flat_map(|(env_var, cmake_var)| env::var(env_var).map(|env_var| (env_var, cmake_var)))
+        .flat_map(|(env_var, cmake_var)| env::var(env_var).map(|env_var_val| (env_var_val, cmake_var)))
         .for_each(|(env_var_val, cmake_var)| { cfg.define(cmake_var, env_var_val); });
 
     cfg
