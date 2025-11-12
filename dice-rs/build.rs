@@ -62,7 +62,7 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         .flatten()
         .map(|maybe_entry| maybe_entry.map(DirEntry::into_path))
         .filter(|maybe_path| maybe_path
-            .into_iter()
+            .iter()
             .all(|path| path
                 .extension()
                 .into_iter()
@@ -99,14 +99,13 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     // build libtsano.o and copy it to the root output directory
     let _ = WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
-        .filter(|maybe_entry| maybe_entry
-            .into_iter()
+        .find(|maybe_entry| maybe_entry
+            .iter()
             .all(|entry| entry
                 .file_name()
                 .to_str()
                 .into_iter()
                 .any(|name| name == "libtsano.so" || name == "libtsano.dylib")))
-        .next()
         .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })?
         .map(DirEntry::into_path)
         .map(|path| fs::copy(path, &output_dir))?;
