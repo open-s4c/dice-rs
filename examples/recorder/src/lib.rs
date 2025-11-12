@@ -47,7 +47,9 @@ struct Recorder {
     ids: Vec<TypeId>,
 }
 
-init_dice_state!();
+init_dice_state! {
+    log_level: log::LevelFilter::Debug
+}
 
 tls_key!(RECORDER: Recorder);
 
@@ -61,7 +63,6 @@ static LOCKED: AtomicBool = AtomicBool::new(false);
 
 #[inline]
 pub fn release_lock(lock: &'static AtomicBool) {
-    assert!(lock.load(Ordering::Relaxed) == true);
     lock.store(false, Ordering::Release);
 }
 
