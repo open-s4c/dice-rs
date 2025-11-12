@@ -60,14 +60,22 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         .map(WalkDir::new)
         .into_iter()
         .flatten()
-        .filter_map(Result::ok)
-        .map(DirEntry::into_path)
-        .filter(|path| path.extension().into_iter().any(|ext| ext == "o"))
-        .collect();
+        .map(|maybe_entry| maybe_entry.map(DirEntry::into_path))
+        .filter(|maybe_path| maybe_path
+            .into_iter()
+            .all(|path| path
+                .extension()
+                .into_iter()
+                .any(|ext| ext == "o")))
+        .collect::<Result<_, _>>()?;
 
     // get object file names
     let object_file_names = object_paths.iter()
-        .map(|path| path.file_name().expect("object path must have a filename").as_encoded_bytes().to_vec())
+        .map(|path| path
+            .file_name()
+            .expect("object paths are filtered by extension which requires filename to be present")
+            .as_encoded_bytes()
+            .to_vec())
         .collect();
 
     // pack object files into static library
@@ -91,10 +99,15 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     // build libtsano.o and copy it to the root output directory
     let _ = WalkDir::new(cfg.build_target("tsano").build())
         .into_iter()
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_name().to_str().into_iter().any(|name| name == "libtsano.so" || name == "libtsano.dylib"))
+        .filter(|maybe_entry| maybe_entry
+            .into_iter()
+            .all(|entry| entry
+                .file_name()
+                .to_str()
+                .into_iter()
+                .any(|name| name == "libtsano.so" || name == "libtsano.dylib")))
         .next()
-        .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })
+        .ok_or_else(|| FileNotFoundError { filename: "libtsano.so".to_string() })?
         .map(DirEntry::into_path)
         .map(|path| fs::copy(path, &output_dir))?;
 
