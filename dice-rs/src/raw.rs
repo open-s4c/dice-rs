@@ -10,6 +10,7 @@ pub type PsCallbackF = Option<
     ) -> DiceResult,
 >;
 
+#[link(name = "dice", kind = "static")]
 unsafe extern "C" {
     pub fn ps_subscribe(chain: Chain, ty: TypeId, cb: PsCallbackF, prio: i32) -> i32;
     pub fn ps_publish(chain: Chain, ty: TypeId, event: *const c_void, md: *mut Metadata) -> i32;
@@ -19,6 +20,7 @@ pub mod thread {
     use crate::DiceThreadId;
 
     use super::*;
+    #[link(name = "dice", kind = "static")]
     unsafe extern "C" {
         pub fn self_id(mt: *mut Metadata) -> DiceThreadId;
         pub fn self_retired(mt: *mut Metadata) -> bool;
@@ -27,6 +29,7 @@ pub mod thread {
     }
 }
 
+#[link(name = "dice", kind = "static")]
 unsafe extern "C" {
     pub fn mempool_alloc(size: usize) -> *mut c_void;
     pub fn mempool_free(ptr: *mut c_void);
