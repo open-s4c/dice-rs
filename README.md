@@ -15,7 +15,7 @@ rust wrapper for dice
 build and run the record example
 ```
 gcc -std=c11 -O1 -g -pthread -fsanitize=thread tests/atomic_stable.c -o tests/atomic_stable
-cargo build --features "dice-malloc dice-pthread_create dice-self dice-tsan" && cc -shared  -Wl,--whole-archive target/debug/libreplay.a -Wl,--no-whole-archive -o target/debug/libreplay.so && TSANO_LIBDIR=target/debug ./dice/deps/tsano/tsano LD_PRELOAD=target/debug/libreplay.so ./tests/atomic_stable
+cargo build --features "dice-malloc dice-pthread_create dice-self dice-tsan" && cc -shared  -Wl,--whole-archive target/debug/librecorder.a -Wl,--no-whole-archive -o target/debug/librecorder.so && TSANO_LIBDIR=target/debug ./dice/deps/tsano/tsano LD_PRELOAD=target/debug/librecorder.so ./tests/atomic_stable
 ```
 
 ## run examples:

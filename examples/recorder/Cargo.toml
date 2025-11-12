@@ -6,7 +6,7 @@ license = "0bsd"
 
 [lib]
 name = "recorder"
-crate-type = ["cdylib"]
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 dice-rs = { version = "0.1", path = "../../dice-rs" }
