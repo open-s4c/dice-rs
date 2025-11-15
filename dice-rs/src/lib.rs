@@ -1,9 +1,15 @@
+//! High-level Rust bindings and utilities for integrating with the `dice` engine.
+//!
+//! This module provides:
+//! - type aliases for core `dice` identifiers
+//! - the [`DiceEvent`] trait used by event types
+//! - integration with dice's mempool allocator via [`MempoolAllocator`]
+//! - metadata helpers for callbacks
+//! - thread-local storage helpers for dice threads
+//! - macros for subscribing Rust callbacks to dice chains and initializing logging
 pub mod log;
 pub mod raw;
 
-pub type ChainId = u16;
-pub type TypeId = u16;
-pub type DiceThreadId = u64;
 use std::{
     alloc::{GlobalAlloc, Layout},
     marker::PhantomData,
@@ -16,6 +22,25 @@ pub mod events {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
+// TODO: consider using newtype pattern for ChainId, TypeId and DiceThreadId
+
+/// Identifier of a dice callback chain.
+pub type ChainId = u16;
+
+/// Identifier of a dice event type.
+pub type TypeId = u16;
+
+/// Identifier for a dice thread, as used by the `dice-self` module.
+pub type DiceThreadId = u64;
+
+/// Available dice chains.
+///
+/// These correspond to different interception and capture points in the dice
+/// processing pipeline.
+///
+/// <div class="warning">
+/// enabling `dice-self` module will disable intercept chains and enable capture chains
+/// </div>
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Chain {
@@ -27,19 +52,49 @@ pub enum Chain {
     CaptureAfter = 6,
 }
 
+/// Result codes returned from dice callbacks.
+///
+/// These values directly map to dice's C API.
+#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DiceResult {
+    Ok = 0,
+    StopChain = 1,
+    DropEvent = 2,
+    HandlerOff = 3,
+    Invalid = -1,
+    Error = -2,
+}
+
+/// Trait implemented by all dice event types.
+///
+/// `ID` must match the event type ID used by dice.
 pub trait DiceEvent: Sized {
     const ID: TypeId;
 
+    /// Fallback reference used when dice does not provide an event payload.
+    ///
+    /// This is typically used for unit structs, where dice will pass a null
+    /// pointer instead of an actual instance.
     fn fallback<'a>() -> Option<&'a Self> {
         None
     }
 
-    /// This function is intended to be used for casting a void pointer from a dice callback to a Rust reference.
-    /// If the Event does not require any data, dice will not provide a type/struct for this and return a nullpointer
-    /// The `#[dice_event(...)]` attribute macro correctly handles this and implements a fallback.
-    /// The fallback is a &T which is a valid reference for unit structs (structs without a body)
+    /// Cast a raw pointer from a dice callback to a Rust reference.
+    ///
+    /// If the event does not carry data, dice will not provide a concrete type
+    /// or struct and instead return a null pointer. The `#[dice_event(...)]`
+    /// attribute macro handles this correctly by implementing [`fallback`].
+    ///
+    /// The fallback is a `&T`, which is a valid reference for unit structs
+    /// (structs without fields).
+    ///
     /// # Safety
-    /// usage of a valid pointer to a Self or a nullpointer for a Self with a fallback
+    ///
+    /// - `ptr` must either be:
+    ///   - a valid pointer to a properly initialized `Self`, or
+    ///   - a null pointer for types where [`fallback`] returns `Some`.
+    /// - The pointed-to value must outlive the returned reference.
     #[inline]
     unsafe fn from_raw<'a>(ptr: *const ()) -> Option<&'a Self> {
         if ptr.is_null() {
@@ -55,99 +110,121 @@ pub trait DiceEvent: Sized {
     }
 }
 
-#[repr(i32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum DiceResult {
-    Ok = 0,
-    StopChain = 1,
-    DropEvent = 2,
-    HandlerOff = 3,
-    Invalid = -1,
-    Error = -2,
-}
-
-/// Metadata is given in a dice subscribe callback and is constructed in publishers
-/// For example: it is used to access "internal" properties like thread id in Capture chain callbacks.
-/// due to private fields it is not possible to construct Metdata (safely)
-/// it is also !Send and !Sync (from the _marker: PhatnomData<*mut ()>) and no Copy nor Clone.
-/// this is to ensure uniqueness and locality of metadata usage within callbacks.
+/// Metadata passed into a dice subscribe callback and constructed by publishers.
+///
+/// For example, metadata is used to access "internal" properties such as the
+/// thread ID in capture chain callbacks.
+///
+/// Due to private fields, it is not possible to construct `Metadata` safely
+/// outside of this crate. It is also:
+///
+/// - `!Send` and `!Sync` (via the `_marker: PhantomData<*mut ()>` field)
+/// - neither `Copy` nor `Clone`
+///
+/// This ensures uniqueness and locality of metadata usage within callbacks.
 #[repr(C, align(8))]
 #[derive(Debug)]
 pub struct Metadata {
     drop_: bool,
-    // This marker makes Metadata !Send and !Sync
+    // This marker makes `Metadata` !Send and !Sync.
     _marker: PhantomData<*mut ()>,
 }
 
-/// Allocator backed by dice's Allocator
+/// Allocator backed by dice's mempool allocator.
+///
+/// This type is intended to be used as a global allocator for crates that want
+/// to allocate via dice's mempool instead of the default system allocator.
 pub struct MempoolAllocator;
 
+const MIN_ALIGN: usize = 8;
+
+/// Dice based memory allocator
+///
+/// base alignment is 8 bytes, and every object gets a header 8 bytes
+/// this means we overallocate by at minimum 8 bytes.
+/// the padding is then calculated by using the 8 byte discretization.
 /// # Safety
 ///
-/// * the current implementation does unwind, which is UB by definition here.
-///   The reason for this is the wrapped allocator here currently is not aligning arbitrary structs
-///   corretly. The backing allocator assumes 8 byte alignment. This is because we currently assume
-///   all types we currently work with are at most 8 bytes aligned. In case an alignment with higher
-///   requirements appears, we want to error and see which one and where.
-///   TODO Once the backing allocator allows arbitrary alignments, this will be solved.
-///
-/// * Dice needs to be patched to use 8 byte alignment. Then less than equal 8 byte alignment works.
-///   everything else from [`std::alloc::GlobalAlloc`] applies
-///   TODO: update this once dice allows arbitrary alignment or #106 being merged.
-///   we can also consider doing alignment ourselves
-///
-/// * the allocator is from rust's perspective stateless and makes no assumptions about allocations happening.
-///   the rust optimizer is free to not allocate or overallocate.
+/// Everything from [`std::alloc::GlobalAlloc`] applies.
 unsafe impl GlobalAlloc for MempoolAllocator {
-    /// returns a pointer to correctly sized memory.
-    ///
-    /// # Errors
-    /// currently the alignment is ignored. but 8 byte alignment can be configured in dice
-    ///
+    /// Returns a pointer to a correctly sized memory region.
     /// # Safety
-    /// to get stable 8 byte alignment, dice needs to be patched: #106 Memory Alignment Patch
-    /// 8 byte alignment seems to be enough for now.
-    /// We do a check here to see if this contract holds, so we can know if we run into requirements we currently cannot guarantee
-    /// this will panic and unwind, which breaks the usual GlobalAlloc contract,
-    /// but if we abort, we would not get the information we want.
     ///
-    /// everything else from [`std::alloc::GlobalAlloc::alloc`] applies
+    /// Everything from [`std::alloc::GlobalAlloc::alloc`] applies.
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = unsafe { raw::mempool_alloc(layout.size()) } as *mut u8;
-        assert!(
-            !ptr.is_null() && ptr as usize % layout.align() == 0,
-            "Requested alignment {} but got {}",
-            layout.align(),
-            2 ^ (ptr as usize).trailing_zeros()
-        );
-        ptr
+        let align = layout.align();
+        let size = layout.size();
+
+        if align <= MIN_ALIGN {
+            return unsafe { raw::mempool_alloc(size) as *mut u8 };
+        }
+
+        // size + alignment guarantees space for header and alignment
+        let alloc_size = size + align;
+        let raw_ptr = unsafe { raw::mempool_alloc(alloc_size) as *mut u8 };
+
+        if raw_ptr.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        let raw_addr = raw_ptr as usize;
+        let header_size = std::mem::size_of::<usize>();
+
+        let mask = align - 1;
+        let aligned_addr = (raw_addr + header_size + mask) & !mask;
+        let aligned_ptr = aligned_addr as *mut u8;
+
+        // Store the header immediately before the aligned pointer.
+        let header_ptr = unsafe { (aligned_ptr as *mut usize).sub(1) };
+        unsafe { *header_ptr = raw_addr };
+
+        aligned_ptr
     }
 
+    /// Deallocate a previously allocated memory region.
+    ///
     /// # Safety
-    /// the current implementation does ignore the layout, but this is a TODO to be changed.
-    /// everything else from [`std::alloc::GlobalAlloc::dealloc`] applies
+    ///
+    /// Everything from [`std::alloc::GlobalAlloc::dealloc`] applies
     #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        let ptr = ptr as *mut libc::c_void;
-        unsafe { raw::mempool_free(ptr) };
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        if layout.align() <= MIN_ALIGN {
+            unsafe { raw::mempool_free(ptr as *mut libc::c_void) };
+        } else {
+            // Read the header to find the original pointer
+            let header_ptr = unsafe { (ptr as *mut usize).sub(1) };
+            let raw_addr = unsafe { *header_ptr };
+            unsafe { raw::mempool_free(raw_addr as *mut libc::c_void) };
+        }
     }
 }
 
+/// Helpers for dice-aware thread-local storage and thread IDs.
+///
+/// This module allows subscribers to:
+///
+/// - determine the dice thread they are running on
+/// - use dice-backed thread-local storage.
+///
+/// <div class="warning">
+/// This requires the `dice-self` module to be linked.
+/// Without the `dice-self` module, this will break.
+/// </div>
 #[cfg(feature = "dice-self")]
 pub mod thread {
     use std::{marker::PhantomData, mem::MaybeUninit};
 
     use crate::{DiceThreadId, Metadata, raw};
 
-    /// get the thread id
-    /// if this is called outside a valid thread it will return 0
+    /// Get the current dice thread ID.
     pub fn self_id(mt: &mut Metadata) -> DiceThreadId {
-        // SAFETY: dice will return a number >= 1 if it is a thread, and 0 if it is not within a thread
+        // Safety: if dice-self is linked this will return a valid id
         unsafe { raw::thread::self_id(mt) }
     }
 
-    // Note: T here does not have to be repr(C) as we do the size calculation on the rust side
+    // Note: `T` does not have to be `repr(C)` as we perform the size
+    // calculation on the Rust side.
     #[repr(C)]
     struct TlsCell<T> {
         initialized: bool,
@@ -158,7 +235,6 @@ pub mod thread {
         _marker: PhantomData<T>,
     }
 
-    // this is kind of useless, but clippy wants this.
     impl<T: Default> Default for TlsKey<T> {
         fn default() -> Self {
             Self::new()
@@ -240,7 +316,7 @@ macro_rules! subscribe_scoped {
             |$e: &$t, $m: &mut $crate::Metadata| $body;
 
         // enforce priority > 4 to not conflict with dice internals
-        assert!(prio > 4, "Priority must be greater than 4");
+        assert!($prio > 4, "Priority must be greater than 4");
 
         extern "C" fn __trampoline(
             chain: $crate::Chain,

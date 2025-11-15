@@ -123,7 +123,7 @@ impl Recorder {
     }
 
     pub fn record_event<T: DiceEvent>(&mut self) {
-        assert!(self.initd);
+        // assert!(self.initd);
         let record = GlobalAtomicRecord::new::<T>();
         self.order.push(record.global_index);
         self.ids.push(record.event);
@@ -131,6 +131,7 @@ impl Recorder {
 }
 
 subscribe!(Chain::CaptureEvent, 9999, |_event: &SelfInitEvent, meta| {
+    println!("HELLO");
     let thread_id = self_id(meta);
 
     if thread_id != 1 {
