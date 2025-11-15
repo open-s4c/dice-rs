@@ -39,8 +39,7 @@ pub trait DiceEvent: Sized {
     /// The `#[dice_event(...)]` attribute macro correctly handles this and implements a fallback.
     /// The fallback is a &T which is a valid reference for unit structs (structs without a body)
     /// # Safety
-    /// usage of a valid pointer to a Self or a nullpointer
-    /// if the type doesn't implement a fallback and the pointer is null, it will return None
+    /// usage of a valid pointer to a Self or a nullpointer for a Self with a fallback
     #[inline]
     unsafe fn from_raw<'a>(ptr: *const ()) -> Option<&'a Self> {
         if ptr.is_null() {
@@ -84,39 +83,43 @@ pub struct Metadata {
 pub struct MempoolAllocator;
 
 /// # Safety
-/// 
-/// * the current implementation does unwind, which is UB by definition here. 
-///   This is so we can know if dice is wrong. 
-///   There are no good alternatives, because this means the core C dependency itself is broken.
-/// 
+///
+/// * the current implementation does unwind, which is UB by definition here.
+///   The reason for this is the wrapped allocator here currently is not aligning arbitrary structs
+///   corretly. The backing allocator assumes 8 byte alignment. This is because we currently assume
+///   all types we currently work with are at most 8 bytes aligned. In case an alignment with higher
+///   requirements appears, we want to error and see which one and where.
+///   TODO Once the backing allocator allows arbitrary alignments, this will be solved.
+///
 /// * Dice needs to be patched to use 8 byte alignment. Then less than equal 8 byte alignment works.
-///   everything else from [`std::alloc::GlobalAlloc`] applies 
+///   everything else from [`std::alloc::GlobalAlloc`] applies
 ///   TODO: update this once dice allows arbitrary alignment or #106 being merged.
-///   we can also consider doing alignment ourselves 
-/// 
+///   we can also consider doing alignment ourselves
+///
 /// * the allocator is from rust's perspective stateless and makes no assumptions about allocations happening.
 ///   the rust optimizer is free to not allocate or overallocate.
 unsafe impl GlobalAlloc for MempoolAllocator {
-    
     /// returns a pointer to correctly sized memory.
-    /// 
+    ///
     /// # Errors
     /// currently the alignment is ignored. but 8 byte alignment can be configured in dice
-    /// 
+    ///
     /// # Safety
     /// to get stable 8 byte alignment, dice needs to be patched: #106 Memory Alignment Patch
     /// 8 byte alignment seems to be enough for now.
     /// We do a check here to see if this contract holds, so we can know if we run into requirements we currently cannot guarantee
-    /// this will panic and unwind, which breaks the usual GlobalAlloc contract, 
+    /// this will panic and unwind, which breaks the usual GlobalAlloc contract,
     /// but if we abort, we would not get the information we want.
-    /// 
+    ///
     /// everything else from [`std::alloc::GlobalAlloc::alloc`] applies
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = unsafe { raw::mempool_alloc(layout.size()) as *mut u8 };
+        let ptr = unsafe { raw::mempool_alloc(layout.size()) } as *mut u8;
         assert!(
             !ptr.is_null() && ptr as usize % layout.align() == 0,
-            "Requested alignment {} but got {}", layout.align(), 2 ^ (ptr as usize).trailing_zeros()
+            "Requested alignment {} but got {}",
+            layout.align(),
+            2 ^ (ptr as usize).trailing_zeros()
         );
         ptr
     }
@@ -126,7 +129,7 @@ unsafe impl GlobalAlloc for MempoolAllocator {
     /// everything else from [`std::alloc::GlobalAlloc::dealloc`] applies
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        let ptr = ptr as *mut _;
+        let ptr = ptr as *mut libc::c_void;
         unsafe { raw::mempool_free(ptr) };
     }
 }
@@ -139,11 +142,8 @@ pub mod thread {
 
     /// get the thread id
     /// if this is called outside a valid thread it will return 0
-    /// SAFETY:
-    /// requires dice-self
     pub fn self_id(mt: &mut Metadata) -> DiceThreadId {
         // SAFETY: dice will return a number >= 1 if it is a thread, and 0 if it is not within a thread
-        // it requires dice-self
         unsafe { raw::thread::self_id(mt) }
     }
 
@@ -176,15 +176,10 @@ pub mod thread {
     impl<T: Default> TlsKey<T> {
         #[inline(always)]
         fn cell_ptr(&self, mt: &mut Metadata) -> *mut TlsCell<T> {
+            let self_key = &self as *const _ as *const libc::c_void;
             // SAFETY: We assume dice correctly returns a pointer for TLS storage.
             // in debug build we do an additional sanity check that this holds.
-            let raw = unsafe {
-                raw::thread::self_tls(
-                    mt,
-                    self as *const _ as *const _,
-                    size_of::<TlsCell<T>>(),
-                )
-            };
+            let raw = unsafe { raw::thread::self_tls(mt, self_key, size_of::<TlsCell<T>>()) };
             let ptr = raw as *mut TlsCell<T>;
             debug_assert!(ptr.is_aligned() && !ptr.is_null(), "Sanity Check");
             ptr
@@ -211,7 +206,7 @@ pub mod thread {
             if !cell.initialized {
                 cell.initialized = true;
                 // SAFETY: external memory, so a volatile write
-                unsafe { std::ptr::write_volatile((*cell).value.as_mut_ptr(), T::default()) };                
+                unsafe { std::ptr::write_volatile((*cell).value.as_mut_ptr(), T::default()) };
             }
             // SAFETY: this value is initialized now
             unsafe { cell.value.assume_init_mut() }
@@ -228,9 +223,11 @@ pub mod thread {
 }
 
 /// Create a callback and subscribe to dice.
-// this subscribe macro emulates a normal rust anonymous function structure.
-// it creates a c callback and subscribes it automatically
-// it is type, lifetime and capture guarded using the _guard
+/// this subscribe macro emulates a normal rust anonymous function structure.
+/// it creates a c callback and subscribes it automatically
+/// it is type, lifetime and capture guarded using the _guard
+/// # Warning
+/// The priority must be > 4 to not conflict with dice interals
 #[macro_export]
 macro_rules! subscribe_scoped {
     ($chain:expr, $prio:expr, |$e:ident: &$t:ty, $m:ident| $body:block) => {{
@@ -242,6 +239,9 @@ macro_rules! subscribe_scoped {
         let _guard: fn(&$t, &mut $crate::Metadata) -> $crate::DiceResult =
             |$e: &$t, $m: &mut $crate::Metadata| $body;
 
+        // enforce priority > 4 to not conflict with dice internals
+        assert!(prio > 4, "Priority must be greater than 4");
+
         extern "C" fn __trampoline(
             chain: $crate::Chain,
             _ty: $crate::TypeId,
@@ -250,7 +250,6 @@ macro_rules! subscribe_scoped {
         ) -> $crate::DiceResult {
             // SAFETY: the dice subscribe callback either gives a correctly typed pointer for the event
             // or it gives a null in case the Event struct is empty.
-            // in this case an empty Fallback is used.
             // Rust allows to take references of unit types directly and treat them as instances (like &() as () is type fields)
             // as these have no fields, there is also no concern of possibility of mutating these (potentially shared) references
             let Some(ev_ref) = (unsafe { <$t as $crate::DiceEvent>::from_raw(event as _) }) else {
@@ -267,7 +266,9 @@ macro_rules! subscribe_scoped {
             $body
         }
 
-        // SAFETY
+        // SAFETY: a valid c function is supplied, the chain is typed/variance safe
+        // the prio must be > 4 is also confirmed. for Priority <= 4, conflicts with dice
+        // internals could happen.
         unsafe {
             $crate::raw::ps_subscribe(
                 $chain,
