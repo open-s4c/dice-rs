@@ -171,7 +171,7 @@ macro_rules! subscribe_scoped {
 
 #[macro_export]
 macro_rules! subscribe {
-    ($chain:expr, $prio:expr, |$e:ident: &$t:ty, $m:ident| $body:block) => {
+    ($chain:expr, $slot:expr, |$e:ident: &$t:ty, $m:ident| $body:block) => {
         const _: () = {
             #[allow(non_snake_case)]
             #[::ctor::ctor]
@@ -180,7 +180,7 @@ macro_rules! subscribe {
                 static INIT: Once = Once::new();
 
                 INIT.call_once(|| {
-                    let _ = $crate::subscribe_scoped!($chain, $prio, |$e: &$t, $m| $body);
+                    let _ = $crate::subscribe_scoped!($chain, $slot, |$e: &$t, $m| $body);
                 });
             }
         };

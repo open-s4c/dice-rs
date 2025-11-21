@@ -54,6 +54,8 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         maybe_cmake_out_dir = Some(cfg.build_target(&target).build());
     }
 
+    let dependency_modules = ["tmplr"];
+
     // find all object file paths in cmake build directory
     let object_paths : Vec<PathBuf> = maybe_cmake_out_dir
         .map(|dst| dst.join("build"))
@@ -66,7 +68,15 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
             .all(|path| path
                 .extension()
                 .into_iter()
-                .any(|ext| ext == "o")))
+                .any(|ext| ext == "o")
+            & path
+                .file_name()
+                .into_iter()
+                .any(|filename| filename.to_str()
+                    .into_iter()
+                    .any(|filename_str| dependency_modules
+                        .iter()
+                        .all(|dependency_module| !filename_str.starts_with(dependency_module))))))
         .collect::<Result<_, _>>()?;
 
     // get object file names
