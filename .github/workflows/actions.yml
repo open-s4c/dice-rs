@@ -31,6 +31,8 @@ jobs:
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          check_id: dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
+          name: dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
           conclusion: ${{ job.status }}
           status: completed
+          output: |
+            {"summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
