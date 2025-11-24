@@ -26,3 +26,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build --verbose
+      - name: Create Downstream Test Check
+        if: ${{ always() && github.event_name == 'repository_dispatch' }}
+        uses: LouisBrunner/checks-action@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          check_id: dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
+          conclusion: ${{ job.status }}
+          status: completed
