@@ -1,0 +1,25 @@
+name: Test dice-rs
+
+on:
+  push:
+  pull_request:
+  repository_dispatch:
+    types: [ test-dice ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Checkout Project A dependency
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          repository: open-s4c/dice
+          ref: ${{ github.event.client_payload.sha }}
+          path: dice
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --verbose
