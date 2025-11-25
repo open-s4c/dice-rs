@@ -40,7 +40,7 @@ jobs:
         with:
           repo: open-s4c/dice
           sha: ${{ github.event.client_payload.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT }}
           name: ${{ github.event.client_payload.check_name }}
           conclusion: ${{ job.status }}
           status: completed
