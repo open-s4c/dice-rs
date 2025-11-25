@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       checks: write
-    continue-on-error: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,7 +33,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Generate a token
-        if: ${{ github.event_name == 'repository_dispatch' }}
+        if: ${{ always() && github.event_name == 'repository_dispatch' }}
         id: generate-token
         uses: actions/create-github-app-token@v2
         with:
@@ -42,7 +41,7 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Create Downstream Test Check
-        if: ${{ github.event_name == 'repository_dispatch' }}
+        if: ${{ always() && github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           repo: open-s4c/dice
