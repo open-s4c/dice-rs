@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions: write-all
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,7 +28,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Create Downstream Test Check
-        if: ${{ always() && github.event_name == 'repository_dispatch' }}
+        if: ${{ always() }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -35,4 +36,4 @@ jobs:
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"title":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}","summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+            {"summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
