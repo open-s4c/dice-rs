@@ -2,6 +2,10 @@ name: Test dice-rs
 
 on:
   push:
+    branches:
+      - main
+    tags:
+      - '**'
   pull_request:
   repository_dispatch:
     types: [ test-dice ]
@@ -9,6 +13,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
