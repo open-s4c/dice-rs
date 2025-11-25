@@ -1,6 +1,11 @@
 name: Test dice-rs
 
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - '**'
   pull_request:
   repository_dispatch:
     types: [ test-dice ]
@@ -28,7 +33,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Create Downstream Test Check
-        if: ${{ always() }}
+        if: ${{ always() && github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -36,4 +41,4 @@ jobs:
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+            {"title":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}","summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
