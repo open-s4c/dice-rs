@@ -53,4 +53,4 @@ jobs:
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"title":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+            {"title":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})","summary":"dice-rs tests"}
