@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       checks: write
-    continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
+    continue-on-error: ${{ github.event_name == 'repository_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,6 +34,7 @@ jobs:
       - name: Build
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         run: cargo build --verbose
+        continue-on-error: ${{ github.event_name == 'repository_dispatch' }}
       - name: Create Downstream Test Check
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
