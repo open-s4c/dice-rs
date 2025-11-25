@@ -39,8 +39,8 @@ jobs:
         with:
           repo: open-s4c/dice
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: Test dice-rs
+          name: dice-rs-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"title":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})","summary":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}"}
+            {"title":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
