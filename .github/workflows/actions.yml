@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       checks: write
+    continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,12 +34,13 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Create Downstream Test Check
-        if: ${{ always() && github.event_name == 'repository_dispatch' }}
+        if: ${{ github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
+          repo: open-s4c/dice
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: test
+          name: Test dice-rs
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"title":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}","summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+            {"title":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})","summary":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}"}
