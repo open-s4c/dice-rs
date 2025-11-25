@@ -46,7 +46,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
-          repo: open-s4c/dice
+          repo: dice
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ steps.generate-token.outputs.token }}
           name: ${{ github.event.client_payload.check_name }}
