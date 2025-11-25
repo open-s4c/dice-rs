@@ -46,7 +46,7 @@ jobs:
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           repo: open-s4c/dice
-          sha: ${{ github.event.client_payload.sha }}
+          sha: ${{ github.event.client_payload.commit }}
           token: ${{ steps.generate-token.outputs.token }}
           name: ${{ github.event.client_payload.check_name }}
           conclusion: ${{ job.status }}
