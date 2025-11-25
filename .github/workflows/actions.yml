@@ -7,13 +7,8 @@ on:
     types: [ test-dice ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-      issues: write
-      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,8 +31,8 @@ jobs:
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
+          name: test
           conclusion: ${{ job.status }}
           status: completed
           output: |
-            {"summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+            {"title":"dice-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}","summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
