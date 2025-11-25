@@ -39,14 +39,14 @@ jobs:
         id: generate-token
         uses: actions/create-github-app-token@v2
         with:
-          repositories: open-s4c/dice
+          repositories: dice
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Create Downstream Test Check
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
-          repo: dice
+          repo: open-s4c/dice
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ steps.generate-token.outputs.token }}
           name: ${{ github.event.client_payload.check_name }}
