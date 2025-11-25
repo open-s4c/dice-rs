@@ -42,7 +42,7 @@ jobs:
           repo: open-s4c/dice
           sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: dice-rs-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
+          name: ${{ github.event.client_payload.check_name }}
           conclusion: ${{ job.status }}
           status: completed
           output: |
