@@ -32,12 +32,14 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
         run: cargo build --verbose
       - name: Create Downstream Test Check
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: LouisBrunner/checks-action@v2.0.0
         with:
           repo: open-s4c/dice
+          sha: ${{ github.event.client_payload.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
           name: dice-rs-${{ github.event.client_payload.sha }}-${{ github.event.client_payload.attempt }}
           conclusion: ${{ job.status }}
