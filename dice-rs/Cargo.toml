@@ -11,10 +11,10 @@ license = "0bsd"
 crate-type = ["rlib", "staticlib"]
 
 [features]
-default = ["lto", "dice"]
+default = ["dice", "dice-self"]
 
 interpose-memcpy = []
-lto = ["dice-dispatch", "dice-box"]
+lto = [] # ["dice-box"] TODO: add again after #14
 
 log-fatal = []
 log-info  = []
@@ -28,7 +28,6 @@ san-undefined = []
 dice = []
 dice-box = ["dice"]
 dice-cxa = ["dice"]
-dice-dispatch = ["dice"]
 dice-malloc = ["dice"]
 dice-memcpy = ["dice"]
 dice-mman = ["dice"]
