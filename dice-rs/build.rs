@@ -4,7 +4,6 @@ use walkdir::{WalkDir, DirEntry};
 
 fn main() -> Result<(), Box<dyn Error>> {
     build_dice()?;
-    build_shim()?;
     Ok(())
 }
 
@@ -184,47 +183,6 @@ fn config_dice() -> cmake::Config {
         .for_each(|(env_var_val, cmake_var)| { cfg.define(cmake_var, env_var_val); });
 
     cfg
-}
-
-fn build_shim() -> Result<(), Box<dyn Error>> {
-    let manifest_dir = get_manifest_dir();
-    let dice_src = manifest_dir.join("..").join("dice");
-
-    let shim_dir = manifest_dir.join("glue");
-
-    let mut cc_build = cc::Build::new();
-    cc_build
-        .file(shim_dir.join("log_shim.c"))
-        .include(dice_src.join("include"))
-        .include(&shim_dir)
-        .flag_if_supported("-fPIC");
-
-    if cfg!(feature = "log-debug") {
-        cc_build.define("DICE_LOG_LEVEL", Some("DEBUG"));
-    } else if cfg!(feature = "log-info") {
-        cc_build.define("DICE_LOG_LEVEL", Some("INFO"));
-    } else if cfg!(feature = "log-fatal") {
-        cc_build.define("DICE_LOG_LEVEL", Some("FATAL"));
-    }
-
-    cc_build.define("LOG_PREFIX", Some("\"dice-rs: \""));
-
-    cc_build.compile("dice_log_shim");
-
-    println!(
-        "cargo:rerun-if-changed={}",
-        shim_dir.join("log_shim.c").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        shim_dir.join("log_shim.h").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        dice_src.join("include").display()
-    );
-
-    Ok(())
 }
 
 fn get_manifest_dir() -> PathBuf {
