@@ -47,7 +47,7 @@ jobs:
           repo: open-s4c/dice
           sha: ${{ github.event.client_payload.commit }}
           token: ${{ steps.generate-token.outputs.token }}
-          name: ${{ github.event.client_payload.check_name }}
+          check_id: ${{ github.event.client_payload.check_id }}
           conclusion: ${{ job.status }}
           status: completed
           output: |
