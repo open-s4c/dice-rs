@@ -34,7 +34,7 @@ jobs:
         run: cargo build --verbose
       - name: Publish results to Dice
         if: ${{ always() && github.event_name == 'repository_dispatch' }}
-        uses: open-s4c/dice@${{ github.event.client_payload.commit }}
+        uses: ./dice
         with:
           status: ${{ job.status }}
           title: 'dice-rs tests for Dice commit ${{ github.event.client_payload.commit }}'
