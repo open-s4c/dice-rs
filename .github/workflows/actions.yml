@@ -32,23 +32,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build --verbose
-      - name: Generate a token
+      - name: Publish results to Dice
         if: ${{ always() && github.event_name == 'repository_dispatch' }}
-        id: generate-token
-        uses: actions/create-github-app-token@v2
+        uses: open-s4c/dice@${{ github.event.client_payload.commit }}
         with:
-          repositories: dice
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-      - name: Update Upstream Test Check
-        if: ${{ always() && github.event_name == 'repository_dispatch' }}
-        uses: LouisBrunner/checks-action@v2.0.0
-        with:
-          repo: open-s4c/dice
-          sha: ${{ github.event.client_payload.commit }}
-          token: ${{ steps.generate-token.outputs.token }}
+          status: ${{ job.status }}
+          title: 'dice-rs tests for Dice commit ${{ github.event.client_payload.commit }}'
+          summary: 'See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})'
+          commit: ${{ github.event.client_payload.commit }}
           check_id: ${{ github.event.client_payload.check_id }}
-          conclusion: ${{ job.status }}
-          status: completed
-          output: |
-            {"title":"dice-rs tests for Dice commit ${{ github.event.client_payload.commit }}","summary":"See workflow run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"}
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
