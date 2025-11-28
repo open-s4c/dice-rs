@@ -31,7 +31,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --verbose
+        run: cargo test
       - name: Publish results to Dice
         if: ${{ always() && github.event_name == 'repository_dispatch' }}
         uses: ./dice

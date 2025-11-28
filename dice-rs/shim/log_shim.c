@@ -1,6 +1,6 @@
-#include "log_shim.h"
+#include <dice/log.h>
+#include <log_shim.h>
 #include <unistd.h>
-#include "../../dice/include/dice/log.h"
 
 void dice_log_write(int level, const char *message) {
     if (level <= LOG_LEVEL_) {
