@@ -4,7 +4,7 @@ use walkdir::{WalkDir, DirEntry};
 
 fn main() -> Result<(), Box<dyn Error>> {
     build_dice()?;
-    build_shim()?;
+    build_dice_plugin("shim")?;
     Ok(())
 }
 
@@ -12,7 +12,7 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
 
-    let mut cfg = config_dice();
+    let mut cfg = config_cmake(&dice_src);
 
     let build_path = env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
@@ -126,11 +126,8 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn config_dice() -> cmake::Config {
-    let manifest_dir = get_manifest_dir();
-    let dice_src = manifest_dir.join("..").join("dice");
-    let mut cfg = cmake::Config::new(&dice_src);
-
+fn config_cmake(path: &Path) -> cmake::Config {
+    let mut cfg = cmake::Config::new(path);
     let profile = env::var("PROFILE").unwrap_or("debug".into());
     let build_type = if profile == "release" {
         "Release"
@@ -186,41 +183,24 @@ fn config_dice() -> cmake::Config {
     cfg
 }
 
-fn build_shim() -> Result<(), Box<dyn Error>> {
+fn build_dice_plugin(plugin_name: &str) -> Result<(), Box<dyn Error>> {
     let manifest_dir = get_manifest_dir();
+    let plugin_dir = manifest_dir.join(plugin_name);
+    let mut cfg = config_cmake(&plugin_dir);
+
+    cfg.define("LOG_PREFIX","\"dice-rs: \"");
+
+    let plugin_out_dir = cfg
+        .build_target(plugin_name)
+        .build();
+
+    println!("cargo:rustc-link-search={}", plugin_out_dir.join("build").display());
+
+    println!(
+        "cargo:rerun-if-changed={}",
+        plugin_dir.display()
+    );
     let dice_src = manifest_dir.join("..").join("dice");
-    let libvsync_src = dice_src.join("deps").join("libvsync");
-    let shim_dir = manifest_dir.join("shim");
-
-    let mut cc_build = cc::Build::new();
-    cc_build
-        .file(shim_dir.join("log_shim.c"))
-        .include(dice_src.join("include"))
-        .include(libvsync_src.join("include"))
-        .include(libvsync_src.join("vatomic").join("include"))
-        .include(&shim_dir)
-        .flag_if_supported("-fPIC");
-
-    if cfg!(feature = "log-debug") {
-        cc_build.define("DICE_LOG_LEVEL", Some("DEBUG"));
-    } else if cfg!(feature = "log-info") {
-        cc_build.define("DICE_LOG_LEVEL", Some("INFO"));
-    } else if cfg!(feature = "log-fatal") {
-        cc_build.define("DICE_LOG_LEVEL", Some("FATAL"));
-    }
-
-    cc_build.define("LOG_PREFIX", Some("\"dice-rs: \""));
-
-    cc_build.compile("dice_log_shim");
-
-    println!(
-        "cargo:rerun-if-changed={}",
-        shim_dir.join("log_shim.c").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        shim_dir.join("log_shim.h").display()
-    );
     println!(
         "cargo:rerun-if-changed={}",
         dice_src.join("include").display()
