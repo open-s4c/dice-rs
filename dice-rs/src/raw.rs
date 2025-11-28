@@ -35,6 +35,7 @@ unsafe extern "C" {
     pub fn mempool_free(ptr: *mut c_void);
 }
 
+#[link(name = "shim", kind = "static")]
 unsafe extern "C" {
     pub fn dice_log_write(level: i32, msg: *const std::os::raw::c_char);
 }

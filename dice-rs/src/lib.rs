@@ -66,6 +66,7 @@ unsafe impl GlobalAlloc for MempoolAllocator {
     }
 }
 
+#[cfg(feature = "dice-self")]
 pub mod thread {
     use std::{marker::PhantomData, mem::MaybeUninit};
 
