@@ -4,3 +4,4 @@ tests/atomic_stable
 tests/malloc_example
 records
 examples/replay
+.vscode
