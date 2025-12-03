@@ -57,7 +57,6 @@ name = "dice-rs"
 version = "0.1.0"
 dependencies = [
  "ar",
- "cc",
  "cmake",
  "ctor",
  "dice-derive",

@@ -1,6 +1,7 @@
 pub mod events;
 pub mod log;
 pub mod raw;
+pub mod mempool;
 
 pub type ChainId = u16;
 pub type TypeId = u16;
@@ -57,12 +58,12 @@ pub struct MempoolAllocator;
 unsafe impl GlobalAlloc for MempoolAllocator {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        unsafe { raw::mempool_alloc(layout.size()) as *mut u8 }
+        mempool::mempool_alloc(layout.size()) as *mut u8
     }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-        unsafe { raw::mempool_free(ptr as *mut _) };
+        mempool::mempool_free(ptr as *mut _)
     }
 }
 
