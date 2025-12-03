@@ -107,17 +107,25 @@ impl Recorder {
             return;
         }
         if let Some(tid) = self.thread_id {
-            let filename = format!("records/record_{tid}.txt");
+            let dir_path = "records";
+
+            if let Err(e) = std::fs::create_dir_all(dir_path) {
+                log::error!("failed to create directory {dir_path}: {e}");
+                return;
+            }
+
+            let filename = format!("{dir_path}/record_{tid}.txt");
             let contents = format!("{:?}", &self.order[..]);
             if let Err(e) = std::fs::write(&filename, contents) {
                 log::error!("failed to write {filename}: {e}");
             }
 
-            let filename2 = format!("records/types_{tid}.txt");
+            let filename2 = format!("{dir_path}/types_{tid}.txt");
             let contents2 = format!("{:?}", &self.ids[..]);
             if let Err(e) = std::fs::write(&filename2, contents2) {
                 log::error!("failed to write {filename2}: {e}");
             }
+
             log::debug!("wrote files: {filename}, {filename2}");
         }
     }
@@ -131,7 +139,6 @@ impl Recorder {
 }
 
 subscribe!(Chain::CaptureEvent, 9999, |_event: &SelfInitEvent, meta| {
-    println!("HELLO");
     let thread_id = self_id(meta);
 
     if thread_id != 1 {
