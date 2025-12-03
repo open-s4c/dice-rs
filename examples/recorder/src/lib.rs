@@ -123,7 +123,7 @@ impl Recorder {
     }
 
     pub fn record_event<T: DiceEvent>(&mut self) {
-        // assert!(self.initd);
+        assert!(self.initd);
         let record = GlobalAtomicRecord::new::<T>();
         self.order.push(record.global_index);
         self.ids.push(record.event);
