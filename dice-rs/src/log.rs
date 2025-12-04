@@ -29,6 +29,7 @@ impl log::Log for DiceLogger {
             return;
         }
         let c = sanitize_to_c(&record.args().to_string());
+        // SAFETY: string is sanitzied and log level ids match c side
         unsafe { crate::raw::dice_log_write(map_level(record.level()), c.as_ptr()) };
     }
 
