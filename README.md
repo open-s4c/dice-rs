@@ -1,16 +1,11 @@
 # dicers
-rust wrapper for dice
+Rust wrapper for Dice
 
 > [!NOTE]
 > [Dice](https://github.com/open-s4c/dice) is a lightweight, extensible C framework for capturing and distributing execution events in multithreaded programs. Designed for low overhead and high flexibility, Dice enables powerful tooling for runtime monitoring, concurrency testing, and deterministic replay using a modular publish-subscribe (pubsub) architecture.
 
-> [!WARNING]
-> might require: [#106 Memory Alignment Patch](https://github.com/open-s4c/dice/issues/106)
-
 ## use
-1. build dice
-2. build crate
-3. run
+build the object file and link
 
 build and run the record example
 ```
