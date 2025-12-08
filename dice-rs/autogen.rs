@@ -17,9 +17,9 @@ use crate::get_manifest_dir;
 
 /// Transforms snake_case strings to CamelCase using Regex replacement.
 fn to_camel_case(s: &str) -> String {
-    let re = Regex::new(r"(?:^|_)([a-z0-9])").unwrap();
+    let re = Regex::new(r"(?:^|_)(?<char>[a-z0-9])").unwrap();
     re.replace_all(&s.to_ascii_lowercase(), |caps: &Captures| {
-        caps[1].to_uppercase()
+        caps["char"].to_uppercase()
     })
     .to_string()
 }
@@ -47,9 +47,9 @@ impl ParseCallbacks for GeneratorCallbacks {
 
         // Regex: Anchored start (^), capture base name (\w+), literal suffix _event, anchored end ($)
         // Example: matches "aligned_alloc_event", captures "aligned_alloc" in group [1]
-        let re = Regex::new(r"^(\w+)_event$").expect("Invalid Regex");
+        let re = Regex::new(r"^(?<base>\w+)_event$").expect("Invalid Regex");
         let caps = re.captures(item.name)?;
-        let base_name = &caps[1];
+        let base_name = &caps["base"];
 
         // Generate Struct Name: "aligned_alloc" -> "AlignedAllocEvent" (note: _event was removed before)
         let rust_name = to_camel_case(base_name) + "Event";
@@ -90,16 +90,22 @@ fn transform_bindings(src: &str) -> String {
     let mut found_constants = Vec::new();
 
     // Example match: "pub const EVENT_FOO: u32 = 1;\n"
-    let const_re = Regex::new(r"(?m)^pub const (EVENT_(\w+)):.*?= (.*?);\r?\n?").unwrap();
+    let const_re = Regex::new(
+        r"(?m)^pub\s+const\s+(?<fullname>EVENT_(?<name>\w+))\s*:.*?\s*=\s*(?<value>.*?);\s*$",
+    )
+    .unwrap();
 
     // Example match: "#[allow(clippy::unnecessary_operation... } ]; ... };" (spanning multiple lines)
     let layout_re = Regex::new(
-        r"(?ms)^#\[allow\(clippy::unnecessary_operation, clippy::identity_op\)\].*?^\};",
+        r"(?ms)^#\[allow\(clippy::unnecessary_operation,\s+clippy::identity_op\)\].*?^\}\s*;",
     )
     .unwrap();
 
     // Example match: "#[dice_event(raw::EVENT_FOO)]"
-    let existing_event_re = Regex::new(r"#\[dice_event\(raw::(EVENT_\w+)\)\]").unwrap();
+    let existing_event_re = Regex::new(r"#\[dice_event\(raw::(?<event>EVENT_\w+)\)\]").unwrap();
+
+    // Regex to cleanup excessive newlines
+    let newline_re = Regex::new(r"\n{3,}").unwrap();
 
     // Extract Layout Testes
     let src_no_tests = layout_re.replace_all(src, |caps: &Captures| {
@@ -110,19 +116,22 @@ fn transform_bindings(src: &str) -> String {
 
     // Extract Constants
     let main_body = const_re.replace_all(&src_no_tests, |caps: &Captures| {
-        let full_name = &caps[1];
-        let base_name = &caps[2];
-        let value = caps[3].trim().trim_end_matches(';');
+        let full_name = &caps["fullname"];
+        let base_name = &caps["name"];
+        let value = caps["value"].trim().trim_end_matches(';');
 
         found_constants.push((full_name.to_string(), base_name.to_string()));
         writeln!(raw_body, "    pub const {}: TypeId = {};", full_name, value).unwrap();
         ""
     });
 
+    // Cleanup excessive newlines created by removing constants
+    let cleaned_body = newline_re.replace_all(&main_body, "\n\n");
+
     // Generate Missing Structs
     let implemented_events: HashSet<String> = existing_event_re
-        .captures_iter(&main_body)
-        .map(|cap| cap[1].to_string())
+        .captures_iter(&cleaned_body)
+        .map(|cap| cap["event"].to_string())
         .collect();
 
     let mut synthetic_structs = String::new();
@@ -141,7 +150,7 @@ fn transform_bindings(src: &str) -> String {
     }
 
     // Strip some paths
-    let final_main = main_body.replace("::std::option::Option", "Option");
+    let final_main = cleaned_body.replace("::std::option::Option", "Option");
 
     // Assemble
     format!(
