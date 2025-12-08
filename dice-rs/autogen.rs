@@ -11,52 +11,25 @@ use bindgen::{
     Formatter,
     callbacks::{AttributeInfo, IntKind, ItemInfo, ItemKind, ParseCallbacks, TypeKind},
 };
+use regex::{Captures, Regex};
 
 use crate::get_manifest_dir;
 
-/// Parses a struct name, must end in "_event"
-fn parse_struct_name(raw_name: &str) -> Option<String> {
-    let base = raw_name.strip_suffix("_event")?;
-
-    let mut camel = to_camel_case(base);
-    camel.push_str("Event");
-    Some(camel)
-}
-
-/// Parses a constant name, must start with "EVENT_"
-fn parse_const_name(raw_name: &str) -> Option<String> {
-    if !raw_name.starts_with("EVENT_") {
-        return None;
-    }
-
-    let body = raw_name.strip_prefix("EVENT_")?;
-    let mut camel = to_camel_case(body);
-    camel.push_str("Event");
-    Some(camel)
-}
-
-/// Makes a string CamelCase
+/// Transforms snake_case strings to CamelCase using Regex replacement.
 fn to_camel_case(s: &str) -> String {
-    s.to_ascii_lowercase()
-        .split('_')
-        .filter(|p| !p.is_empty())
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect()
+    let re = Regex::new(r"(?:^|_)([a-z0-9])").unwrap();
+    re.replace_all(&s.to_ascii_lowercase(), |caps: &Captures| {
+        caps[1].to_uppercase()
+    }).to_string()
 }
 
-/// Stores: RustName -> C_CONSTANT_NAME
 #[derive(Debug, Default)]
 struct GeneratorCallbacks {
     event_map: RefCell<HashMap<String, String>>,
 }
 
 impl ParseCallbacks for GeneratorCallbacks {
+    /// Constants starting with EVENT_ should be treated as unsigned integers.
     fn int_macro(&self, name: &str, _value: i64) -> Option<IntKind> {
         if name.starts_with("EVENT_") {
             Some(IntKind::UInt)
@@ -65,14 +38,22 @@ impl ParseCallbacks for GeneratorCallbacks {
         }
     }
 
+    /// Renames generated structs (ex: `malloc_event` -> 'MallocEvent`) and maps them to constants.
     fn item_name(&self, item: ItemInfo<'_>) -> Option<String> {
         if !matches!(item.kind, ItemKind::Type) {
             return None;
         }
 
-        let rust_name = parse_struct_name(item.name)?;
+        // Regex: Anchored start (^), capture base name (\w+), literal suffix _event, anchored end ($)
+        // Example: matches "aligned_alloc_event", captures "aligned_alloc" in group [1]
+        let re = Regex::new(r"^(\w+)_event$").expect("Invalid Regex");
+        let caps = re.captures(item.name)?;
+        let base_name = &caps[1];
 
-        let base_name = item.name.strip_suffix("_event").unwrap();
+        // Generate Struct Name: "aligned_alloc" -> "AlignedAllocEvent" (note: _event was removed before)
+        let rust_name = to_camel_case(base_name) + "Event";
+
+        // Generate Const Name: "ALLIGNED_ALLOC" -> "EVENT_ALLIGNED_ALLOC"
         let const_name = format!("EVENT_{}", base_name.to_uppercase());
 
         self.event_map
@@ -82,6 +63,7 @@ impl ParseCallbacks for GeneratorCallbacks {
         Some(rust_name)
     }
 
+    /// Add the custom #[dice_event(raw::...)] attribute onto generated structs.
     fn add_attributes(&self, info: &AttributeInfo<'_>) -> Vec<String> {
         if !matches!(info.kind, TypeKind::Struct) {
             return Vec::new();
@@ -95,120 +77,92 @@ impl ParseCallbacks for GeneratorCallbacks {
     }
 }
 
-fn extract_dice_event_macro(line: &str) -> Option<&str> {
-    if !line.starts_with("#[dice_event(raw::") {
-        return None;
-    }
-    let start = line.find("raw::")? + 5;
-    let end = line[start..].find(')')?;
-    Some(&line[start..start + end])
-}
-
-fn extract_const_def(line: &str) -> Option<(&str, &str)> {
-    if !line.starts_with("pub const EVENT_") {
-        return None;
-    }
-    let after_const = &line[10..];
-    let (name, rest) = after_const.split_once(':')?;
-    let (_, val_part) = rest.split_once('=')?;
-    Some((name, val_part.trim().trim_end_matches(';').trim()))
-}
-
+/// Post-processes the bindgen output string
+/// - move layout tests to the bottom of the file
+/// - move constants into raw
+/// - change constants type
+/// - cleanup some paths of types
+/// - rename structs to use CamelCase
 fn transform_bindings(src: &str) -> String {
-    let mut main_body = String::with_capacity(src.len());
     let mut raw_body = String::new();
     let mut tests_body = String::new();
+    let mut found_constants = Vec::new();
 
-    let mut event_consts = Vec::new();
-    let mut implemented_events = HashSet::new();
-    let mut in_test_block = false;
+    // Example match: "pub const EVENT_FOO: u32 = 1;\n"
+    let const_re = Regex::new(r"(?m)^pub const (EVENT_(\w+)):.*?= (.*?);\r?\n?").unwrap();
 
-    const LAYOUT_START: &str = "#[allow(clippy::unnecessary_operation, clippy::identity_op)]";
+    // Example match: "#[allow(clippy::unnecessary_operation... } ];" (spanning multiple lines)
+    let layout_re = Regex::new(r"(?ms)^#\[allow\(clippy::unnecessary_operation, clippy::identity_op\)\].*?^\};").unwrap();
 
-    for line in src.lines() {
-        let trimmed = line.trim_start();
+    // Example match: "#[dice_event(raw::EVENT_FOO)]"
+    let existing_event_re = Regex::new(r"#\[dice_event\(raw::(EVENT_\w+)\)\]").unwrap();
 
-        // Handle: layout tests
-        if in_test_block {
-            writeln!(tests_body, "{}", line).unwrap();
-            if line.contains("};") {
-                in_test_block = false;
-            }
-            continue;
-        }
-        if trimmed.starts_with(LAYOUT_START) {
-            in_test_block = true;
-            writeln!(tests_body, "{}", line).unwrap();
-            continue;
-        }
+    // Extract Layout Testes
+    let src_no_tests = layout_re.replace_all(src, |caps: &Captures| {
+        tests_body.push_str(&caps[0]);
+        tests_body.push('\n');
+        "" 
+    });
 
-        // Handle: event structs
-        if let Some(const_name) = extract_dice_event_macro(trimmed) {
-            if let Some(rust_name) = parse_const_name(const_name) {
-                implemented_events.insert(rust_name);
-            }
-            writeln!(main_body, "{}", line).unwrap();
-            continue;
-        }
+    // Extract Constants
+    let main_body = const_re.replace_all(&src_no_tests, |caps: &Captures| {
+        let full_name = &caps[1];
+        let base_name = &caps[2];
+        let value = caps[3].trim().trim_end_matches(';');
+        
+        found_constants.push((full_name.to_string(), base_name.to_string()));
+        writeln!(raw_body, "    pub const {}: TypeId = {};", full_name, value).unwrap();
+        "" 
+    });
 
-        // Handle: constant
-        if let Some((name, value)) = extract_const_def(trimmed) {
-            event_consts.push(name.to_string());
-            // Move constant to raw module
-            writeln!(raw_body, "    pub const {}: TypeId = {};", name, value).unwrap();
-            continue;
-        }
+    // Generate Missing Structs
+    let implemented_events: HashSet<String> = existing_event_re
+        .captures_iter(&main_body)
+        .map(|cap| cap[1].to_string())
+        .collect();
 
-        // copy line if nothing applies
-        writeln!(main_body, "{}", line).unwrap();
-    }
-
-    // Create Unit structs for events that don't have a struct yet
-    if !event_consts.is_empty() {
-        main_body.push_str("\n// --- synthetic event structs ---\n");
-        for raw_const_name in &event_consts {
-            if let Some(struct_name) = parse_const_name(raw_const_name) {
-                if implemented_events.contains(&struct_name) {
-                    continue;
-                }
-
+    let mut synthetic_structs = String::new();
+    if !found_constants.is_empty() {
+        synthetic_structs.push_str("\n// --- synthetic event structs ---\n");
+        for (const_name, base_name) in found_constants {
+            if !implemented_events.contains(&const_name) {
+                let struct_name = to_camel_case(&base_name) + "Event";
                 writeln!(
-                    main_body,
-                    "\
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-#[dice_event(raw::{raw_const_name})]
-pub struct {struct_name};"
-                )
-                .unwrap();
+                    synthetic_structs,
+                    "#[repr(C)]\n#[derive(Copy, Clone, Debug)]\n#[dice_event(raw::{})]\npub struct {};",
+                    const_name, struct_name
+                ).unwrap();
             }
         }
     }
 
-    // Final Assembly
-    let main_body = main_body.replace("::std::option::Option", "Option");
+    // Assemble
+    let final_main = main_body.replace("::std::option::Option", "Option");
 
-    let mut out = String::with_capacity(src.len() + 500);
-    out.push_str("// --- custom additions ---\n");
-    out.push_str("use crate::{DiceEvent, TypeId};\n");
-    out.push_str("use dice_derive::dice_event;\n");
+    format!(r#"
+// --- Autogenerated by build.rs ---
+// --- Manually Added ---
+use crate::{{DiceEvent, TypeId}};
+use dice_derive::dice_event;
 
-    out.push_str("// --- bindgen output ---\n\n");
-    out.push_str("pub mod raw {\n");
-    out.push_str("    use crate::TypeId;\n");
-    out.push_str(&raw_body);
-    out.push_str("}\n\n");
-
-    out.push_str(&main_body);
-
-    if !tests_body.is_empty() {
-        out.push_str("\n// --- layout tests ---\n");
-        out.push_str(&tests_body);
-    }
-
-    out
+// --- bindgen output ---
+/// raw constants from dice
+pub mod raw {{
+    use crate::TypeId;
+{}}}
+{}
+{}
+// --- layout tests ---
+{}
+"#,
+        raw_body,
+        final_main.trim(),
+        synthetic_structs,
+        tests_body
+    )
 }
 
+/// Aggregates all .h files in the events directory into a single temporary wrapper.h file.
 pub fn create_single_header<P: AsRef<Path>>(dir: P, out: P) {
     let mut wrapper_content = String::from("// Auto-generated wrapper\n");
     let entries = fs::read_dir(&dir).expect("Failed to read events directory");
@@ -254,11 +208,9 @@ pub fn generate() {
         .generate()
         .expect("Unable to generate bindings");
 
-    let output = bindings.to_string();
-    let output = transform_bindings(&output);
-
-    let bindings_file = out_path.join("bindings.rs");
-    fs::write(&bindings_file, output).expect("Couldn't write bindings!");
+    let output = transform_bindings(&bindings.to_string());
+    
+    fs::write(out_path.join("bindings.rs"), output).expect("Couldn't write bindings!");
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", events_dir.display());

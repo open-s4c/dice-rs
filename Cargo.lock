@@ -127,6 +127,7 @@ dependencies = [
  "dice-derive",
  "libc",
  "log",
+ "regex",
  "walkdir",
 ]
 
