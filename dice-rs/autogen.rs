@@ -17,7 +17,7 @@ use crate::get_manifest_dir;
 
 /// Transforms snake_case strings to CamelCase using Regex replacement.
 fn to_camel_case(s: &str) -> String {
-    let re = Regex::new(r"(?:^|_)(?<char>[a-z0-9])").unwrap();
+    let re = Regex::new(r"(?:^|_)(?<char>[a-z0-9])").expect("create valid regex");
     re.replace_all(&s.to_ascii_lowercase(), |caps: &Captures| {
         caps["char"].to_uppercase()
     })
@@ -91,21 +91,31 @@ fn transform_bindings(src: &str) -> String {
 
     // Example match: "pub const EVENT_FOO: u32 = 1;\n"
     let const_re = Regex::new(
-        r"(?m)^pub\s+const\s+(?<fullname>EVENT_(?<name>\w+))\s*:.*?\s*=\s*(?<value>.*?);\s*$",
+        r"(?m)^\s*pub\s+const\s+(?<fullname>EVENT_(?<name>\w+))\s*:.*?=\s*(?<value>.*?)\s*;\s*$",
     )
-    .unwrap();
+    .expect("create valid regex");
 
-    // Example match: "#[allow(clippy::unnecessary_operation... } ]; ... };" (spanning multiple lines)
+    // Example match: "#[allow(clippy::unnecessary_operation... ) ]; ... };" (spanning multiple lines)
+    // Current bindgen is guaranteed to create layout tests in the following pattern:
+    // ```rust
+    // #[allow(clippy::unnecessary_operation, clippy::identity_op)]
+    // const _: () = {
+    //     ["<description>"][<size/alignment/offset check of a field>];
+    //     ....
+    // };
+    // ```
+    // matching for an ending `};` is safe, it is only at the end.
     let layout_re = Regex::new(
-        r"(?ms)^#\[allow\(clippy::unnecessary_operation,\s+clippy::identity_op\)\].*?^\}\s*;",
+        r"(?ms)^\s*#\[\s*allow\s*\(\s*clippy\s*::\s*unnecessary_operation\s*,\s*clippy\s*::\s*identity_op\s*\)\s*\].*?^\s*\}\s*;\s*$",
     )
-    .unwrap();
+    .expect("create valid regex");
 
     // Example match: "#[dice_event(raw::EVENT_FOO)]"
-    let existing_event_re = Regex::new(r"#\[dice_event\(raw::(?<event>EVENT_\w+)\)\]").unwrap();
+    let existing_event_re =
+        Regex::new(r"#\[dice_event\(raw::(?<event>EVENT_\w+)\)\]").expect("create valid regex");
 
     // Regex to cleanup excessive newlines
-    let newline_re = Regex::new(r"\n{3,}").unwrap();
+    let newline_re = Regex::new(r"\n{3,}").expect("create valid regex");
 
     // Extract Layout Testes
     let src_no_tests = layout_re.replace_all(src, |caps: &Captures| {
@@ -118,10 +128,11 @@ fn transform_bindings(src: &str) -> String {
     let main_body = const_re.replace_all(&src_no_tests, |caps: &Captures| {
         let full_name = &caps["fullname"];
         let base_name = &caps["name"];
-        let value = caps["value"].trim().trim_end_matches(';');
+        let value = &caps["value"];
 
         found_constants.push((full_name.to_string(), base_name.to_string()));
-        writeln!(raw_body, "    pub const {}: TypeId = {};", full_name, value).unwrap();
+        writeln!(raw_body, "    pub const {}: TypeId = {};", full_name, value)
+            .expect("Writing to String works");
         ""
     });
 
@@ -144,7 +155,7 @@ fn transform_bindings(src: &str) -> String {
                     synthetic_structs,
                     "#[repr(C)]\n#[derive(Copy, Clone, Debug)]\n#[dice_event(raw::{})]\npub struct {}Event;",
                     const_name, struct_name
-                ).unwrap();
+                ).expect("Writing to String works");
             }
         }
     }
@@ -170,10 +181,7 @@ pub mod raw {{
 // --- layout tests ---
 {}
 "#,
-        raw_body,
-        final_main.trim(),
-        synthetic_structs,
-        tests_body
+        raw_body, final_main, synthetic_structs, tests_body
     )
 }
 
@@ -184,13 +192,14 @@ pub fn create_single_header<P: AsRef<Path>>(dir: P, out: P) {
     let mut paths: Vec<_> = entries
         .map(|res| res.map(|e| e.path()))
         .collect::<Result<_, _>>()
-        .unwrap();
+        .expect("Dice Headers exist locally");
     paths.sort();
 
     for path in paths {
         if path.extension().map_or(false, |s| s == "h") {
             if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                writeln!(wrapper_content, "#include <dice/events/{}>", filename).unwrap();
+                writeln!(wrapper_content, "#include <dice/events/{}>", filename)
+                    .expect("Writing to String works");
             }
         }
     }
@@ -206,7 +215,7 @@ pub fn generate() {
         panic!("Could not find events directory");
     }
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_path = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR exists"));
     let wrapper_path = out_path.join("wrapper.h");
 
     create_single_header(&events_dir, &wrapper_path);
