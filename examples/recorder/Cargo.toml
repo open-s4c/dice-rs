@@ -9,6 +9,6 @@ name = "recorder"
 crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-dice-rs = { version = "0.1", path = "../../dice-rs", features = ["dice-pthread_create", "dice-self", "dice-tsan"] }
+dice-rs = { version = "0.1", path = "../../dice-rs", features = ["dice-pthread_create", "dice-self", "dice-tsan", "dice-malloc"] }
 ctor = "0.6.0"
 log = "0.4.28"

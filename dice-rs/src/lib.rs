@@ -1,4 +1,3 @@
-pub mod events;
 pub mod log;
 pub mod raw;
 
@@ -6,6 +5,13 @@ pub type ChainId = u16;
 pub type TypeId = u16;
 pub type DiceThreadId = u64;
 use std::alloc::{GlobalAlloc, Layout};
+
+pub mod events {
+    #![allow(non_upper_case_globals)]
+    #![allow(non_camel_case_types)]
+    #![allow(non_snake_case)]
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
 
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
