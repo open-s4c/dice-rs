@@ -167,12 +167,38 @@ subscribe!(
     }
 );
 
+subscribe!(Chain::CaptureBefore, 9999, |_event: &MaAreadEvent, meta| {
+    acquire_lock(&LOCKED);
+    generic_record::<MaAreadEvent>(meta);
+    DiceResult::Ok
+});
+
+subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAreadEvent, meta| {
+    release_lock(&LOCKED);
+    DiceResult::Ok
+});
+
 subscribe!(
     Chain::CaptureBefore,
     9999,
-    |_event: &AtomicReadEvent, meta| {
+    |_event: &MaAwriteEvent, meta| {
         acquire_lock(&LOCKED);
-        generic_record::<AtomicReadEvent>(meta);
+        generic_record::<MaAwriteEvent>(meta);
+        DiceResult::Ok
+    }
+);
+
+subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAwriteEvent, meta| {
+    release_lock(&LOCKED);
+    DiceResult::Ok
+});
+
+subscribe!(
+    Chain::CaptureBefore,
+    9999,
+    |_event: &MaCmpxchgEvent, meta| {
+        acquire_lock(&LOCKED);
+        generic_record::<MaCmpxchgEvent>(meta);
         DiceResult::Ok
     }
 );
@@ -180,45 +206,7 @@ subscribe!(
 subscribe!(
     Chain::CaptureAfter,
     9999,
-    |_event: &AtomicReadEvent, meta| {
-        release_lock(&LOCKED);
-        DiceResult::Ok
-    }
-);
-
-subscribe!(
-    Chain::CaptureBefore,
-    9999,
-    |_event: &AtomicWriteEvent, meta| {
-        acquire_lock(&LOCKED);
-        generic_record::<AtomicWriteEvent>(meta);
-        DiceResult::Ok
-    }
-);
-
-subscribe!(
-    Chain::CaptureAfter,
-    9999,
-    |_event: &AtomicWriteEvent, meta| {
-        release_lock(&LOCKED);
-        DiceResult::Ok
-    }
-);
-
-subscribe!(
-    Chain::CaptureBefore,
-    9999,
-    |_event: &AtomicCMPEXCHGEvent, meta| {
-        acquire_lock(&LOCKED);
-        generic_record::<AtomicCMPEXCHGEvent>(meta);
-        DiceResult::Ok
-    }
-);
-
-subscribe!(
-    Chain::CaptureAfter,
-    9999,
-    |_event: &AtomicCMPEXCHGEvent, meta| {
+    |_event: &MaCmpxchgEvent, meta| {
         release_lock(&LOCKED);
         DiceResult::Ok
     }
