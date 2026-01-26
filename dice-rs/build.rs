@@ -13,6 +13,13 @@ use walkdir::{DirEntry, WalkDir};
 mod autogen;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    autogen::generate();
+
+    if env::var("CARGO_FEATURE_MANUAL_LINK").is_ok() {
+        build_dice_plugin("shim")?;
+        return Ok(());
+    }
+
     build_dice()?;
     build_dice_plugin("shim")?;
     Ok(())
@@ -27,8 +34,6 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     let build_path = env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
     let dice_path = lib_path.join("libdice.a");
-
-    autogen::generate();
 
     fs::create_dir_all(&lib_path)?;
 
