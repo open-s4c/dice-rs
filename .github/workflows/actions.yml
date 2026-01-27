@@ -45,9 +45,7 @@ jobs:
           cargo build --features dice-rs/manual-link
       - name: Link the Rust static library (`librecorder.a`) with your standalone dice library (`libdice.a`).
         run: 
-          cc -shared -o librecorder.so \
-            -Wl,--whole-archive target/debug/librecorder.a target/debug/libdice.a -Wl,--no-whole-archive \
-            -lpthread -ldl
+          cc -shared -o librecorder.so -Wl,--whole-archive target/debug/librecorder.a target/debug/libdice.a -Wl,--no-whole-archive -lpthread -ldl
       - name: Run with TSANO
         run: TSANO_LIBDIR=dice/build/deps/tsano ./dice/deps/tsano/tsano LD_PRELOAD=./librecorder.so ./tests/atomic_stable
       - name: Publish results to Dice
