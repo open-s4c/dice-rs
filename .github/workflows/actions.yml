@@ -32,17 +32,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo test
-      - name: Compile Test with Sanitizer
-        run:
-          gcc -std=c11 -O1 -g -pthread -fsanitize=thread tests/atomic_stable.c -o tests/atomic_stable
-      - name: Build Rust Crate (Manual Link)
+      - name: Parse README and execute manual-build-* Commands
         run: |
-          cargo build -p recorder --features dice-rs/static,dice-rs/manual-link
-      - name: Link the Rust static library (`librecorder.a`) with your standalone dice library (`libdice.a`).
-        run: 
-          cc -shared -o librecorder.so -Wl,--whole-archive target/debug/librecorder.a target/debug/libdice.a -Wl,--no-whole-archive -lpthread -ldl
-      - name: Run with TSANO
-        run: TSANO_LIBDIR=target/debug ./dice/deps/tsano/tsano LD_PRELOAD=./librecorder.so ./tests/atomic_stable
+          mkdir -p ./records
+          ./scripts/readme-tag-execute.sh manual-build
+          rm -rf ./records
       - name: Publish results to Dice
         if: ${{ always() && github.event_name == 'repository_dispatch' }}
         uses: ./dice
