@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if env::var("CARGO_FEATURE_STATIC").is_ok() {
             build_dice()?;
         }
-        build_dice_plugin("shim")?; 
+        build_dice_plugin("shim")?;
         return Ok(());
     }
 
