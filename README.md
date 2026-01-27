@@ -39,7 +39,8 @@ gcc -std=c11 -O1 -g -pthread -fsanitize=thread tests/atomic_stable.c -o tests/at
 ### 3. Build Rust Crate (Manual Link)
 Build the crate with the `manual-link` feature to skip compiling the bundled dice C library.
 ```bash
-cargo build -p recorder --features dice-rs/manual-link
+cargo build
+cargo build --features dice-rs/manual-link
 ```
 
 ### 4. Link Manually
