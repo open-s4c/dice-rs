@@ -13,6 +13,13 @@ use walkdir::{DirEntry, WalkDir};
 mod autogen;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    autogen::generate();
+
+    if env::var("CARGO_FEATURE_MANUAL_LINK").is_ok() {
+        build_dice_plugin("shim")?;
+        return Ok(());
+    }
+
     build_dice()?;
     build_dice_plugin("shim")?;
     Ok(())
@@ -27,8 +34,6 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     let build_path = env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
     let lib_path = Path::new(&build_path).join("lib");
     let dice_path = lib_path.join("libdice.a");
-
-    autogen::generate();
 
     fs::create_dir_all(&lib_path)?;
 
@@ -124,11 +129,13 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     // add symbol index
     Command::new("ranlib").arg(&dice_path).status()?;
 
-    let output_dir = Path::new(&build_path)
-        .join("..")
-        .join("..")
-        .join("..")
-        .join("libtsano.so");
+    let root_out_dir = Path::new(&build_path).join("..").join("..").join("..");
+
+    // Copy libdice.a to target/debug/libdice.a (or target/release/libdice.a)
+    fs::copy(&dice_path, root_out_dir.join("libdice.a"))?;
+
+    // Handle libtsano.so path using the reused root_out_dir
+    let tsano_dest = root_out_dir.join("libtsano.so");
 
     // build libtsano.o and copy it to the root output directory
     let _ = WalkDir::new(cfg.build_target("tsano").build())
@@ -146,7 +153,7 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
             filename: "libtsano.so".to_string(),
         })?
         .map(DirEntry::into_path)
-        .map(|path| fs::copy(path, &output_dir))?;
+        .map(|path| fs::copy(path, &tsano_dest))?;
 
     println!("cargo:rustc-link-search={}", lib_path.display());
     println!("cargo:rerun-if-changed={}", dice_src.display());
