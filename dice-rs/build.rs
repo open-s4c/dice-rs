@@ -16,12 +16,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     autogen::generate();
 
     if env::var("CARGO_FEATURE_MANUAL_LINK").is_ok() {
-        build_dice_plugin("shim")?;
+        if env::var("CARGO_FEATURE_STATIC").is_ok() {
+            build_dice()?;
+        }
+        build_dice_plugin("shim")?; 
         return Ok(());
     }
 
-    build_dice()?;
-    build_dice_plugin("shim")?;
+    if env::var("CARGO_FEATURE_STATIC").is_ok() {
+        build_dice()?;
+        build_dice_plugin("shim")?;
+    }
     Ok(())
 }
 

@@ -11,6 +11,7 @@ license = "0bsd"
 crate-type = ["rlib", "staticlib"]
 
 [features]
+default = ["static"]
 interpose-memcpy = []
 lto = [] # ["dice-box"] TODO: add again after #14
 
@@ -19,6 +20,7 @@ log-info  = []
 log-debug = []
 
 manual-link = []
+static = []
 
 san-thread = []
 san-address = []
