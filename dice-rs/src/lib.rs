@@ -123,9 +123,7 @@ pub trait DiceEvent: Sized {
     /// # Safety
     ///
     /// The caller must ensure:
-    /// - `ptr` is either:
-    ///   - A valid, properly aligned pointer to an initialized `Self`, or
-    ///   - Null, but only if [`fallback`](Self::fallback) returns `Some` for this type
+    /// - ptr is a valid, properly aligned pointer to an initialized `Self`, or Null 
     /// - The pointed-to data remains valid for lifetime `'a`
     /// - No mutable references to the data exist for lifetime `'a`
     /// - No other thread is concurrently writing to the data (no data races)
@@ -253,7 +251,7 @@ unsafe impl GlobalAlloc for MempoolAllocator {
     /// # Safety
     ///
     /// Per [`GlobalAlloc::dealloc`], the caller must ensure:
-    /// - `ptr` was allocated by this allocator
+    /// - `ptr` is allocated by this allocator
     /// - `layout` is the same layout used to allocate `ptr`
     ///
     /// Note: While the dice mempool does not require the layout for freeing
