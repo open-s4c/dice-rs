@@ -1,11 +1,58 @@
+//! Procedural macros for the dice-rs crate.
+//!
+//! This crate provides the [`dice_event`] attribute macro for implementing
+//! the `DiceEvent` trait on event structs.
+
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Expr, Fields, Item, parse_macro_input, spanned::Spanned};
+use syn::{parse_macro_input, spanned::Spanned, Expr, Fields, Item};
 
-/// Attribute macro:
-/// Usage:
-///     #[dice_event(<event-id>)]
-///     struct Foo;
+/// Derive the `DiceEvent` trait for an event struct.
+///
+/// This attribute macro implements `DiceEvent` for the annotated struct,
+/// setting its `ID` constant to the provided event type ID.
+///
+/// # Usage
+///
+/// ```ignore
+/// use dice_rs::{DiceEvent, TypeId};
+/// use dice_derive::dice_event;
+///
+/// // For unit structs (marker events with no payload):
+/// #[repr(C)]
+/// #[derive(Copy, Clone, Debug)]
+/// #[dice_event(EVENT_THREAD_START)]
+/// pub struct ThreadStartEvent;
+///
+/// // For structs with fields:
+/// #[repr(C)]
+/// #[derive(Copy, Clone, Debug)]
+/// #[dice_event(EVENT_MALLOC)]
+/// pub struct MallocEvent {
+///     pub size: usize,
+///     pub ret: *const (),
+/// }
+/// ```
+///
+/// # Behavior
+///
+/// - **Unit structs**: The macro implements `fallback()` to return `Some(&Self)`,
+///   allowing dice to pass null pointers for marker events. This is safe because
+///   unit structs have no fields to read.
+///
+/// - **Structs with fields**: The macro uses the default `fallback()` implementation
+///   which returns `None`. If dice passes a null pointer for such an event,
+///   `from_raw` will return `None`.
+///
+/// # Requirements
+///
+/// The struct should be marked `#[repr(C)]` to ensure memory layout compatibility
+/// with dice's C event structures.
+///
+/// # Parameters
+///
+/// - `event_id`: An expression that evaluates to a `TypeId` (typically a constant
+///   from `dice_rs::events::raw`, e.g., `raw::EVENT_MALLOC`).
 #[proc_macro_attribute]
 pub fn dice_event(attr: TokenStream, item: TokenStream) -> TokenStream {
     let id_expr = parse_macro_input!(attr as Expr);
