@@ -22,41 +22,37 @@ cargo build && cc -shared  -Wl,--whole-archive target/debug/librecorder.a -Wl,--
 ## Manual Linking (with TSANO)
 If you want to link against a pre-compiled dice library (for example, reuse `target/debug/libdice.a` from our buildscript) instead of building it from source, and run with ThreadSanitizer:
 
-### 1. Build TSANO Interceptor
-First, acquire the `libtsano.so` shared library by building the `tsano` target from the dice submodule. This avoids building the entire dice project if you only need the interceptor.
-Note: our buildscript also generates it already: `target/debug/libtsano.so`.
-```bash
-cmake -S dice -B dice/build
-cmake --build dice/build --target tsano
-# Output will be at: dice/build/deps/tsano/libtsano.so
-```
+### 1. Compile Test with Sanitizer
 
-### 2. Compile Test with Sanitizer
+[manual-build-step1]: #
 ```bash
 gcc -std=c11 -O1 -g -pthread -fsanitize=thread tests/atomic_stable.c -o tests/atomic_stable
 ```
 
-### 3. Build Rust Crate (Manual Link)
+### 2. Build Rust Crate (Manual Link)
 Build the crate with the `manual-link` feature to skip compiling the bundled dice C library.
+
+[manual-build-step2]: #
 ```bash
-cargo build -p recorder --features dice-rs/manual-link
+cargo build -p recorder --features dice-rs/static,dice-rs/manual-link
 ```
 
-### 4. Link Manually
+### 3. Link Manually
 Link the Rust static library (`librecorder.a`) with your standalone dice library (`libdice.a` as an en example here).
 > [!IMPORTANT]
 > `--whole-archive` is required for the static libs to ensure interceptors and plugins are correctly included in the shared object.
 
+[manual-build-step3]: #
 ```bash
-cc -shared -o librecorder.so \
-    -Wl,--whole-archive target/debug/librecorder.a target/debug/libdice.a -Wl,--no-whole-archive \
-    -lpthread -ldl
+cc -shared -o librecorder.so -Wl,--whole-archive target/debug/librecorder.a target/debug/libdice.a -Wl,--no-whole-archive -lpthread -ldl
 ```
 
-### 5. Run with TSANO
+### 4. Run with TSANO
 Use the `tsano` runner script (located in source) and point it to the directory containing the built `libtsano.so`.
+
+[manual-build-step4]: #
 ```bash
-TSANO_LIBDIR=dice/build/deps/tsano ./dice/deps/tsano/tsano LD_PRELOAD=./librecorder.so ./tests/atomic_stable
+TSANO_LIBDIR=target/debug ./dice/deps/tsano/tsano LD_PRELOAD=./librecorder.so ./tests/atomic_stable
 ```
 
 

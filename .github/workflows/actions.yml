@@ -32,6 +32,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo test
+      - name: Parse README and execute manual-build-* Commands
+        run: |
+          mkdir -p ./records
+          ./scripts/readme-tag-execute.sh manual-build
+          rm -rf ./records
       - name: Publish results to Dice
         if: ${{ always() && github.event_name == 'repository_dispatch' }}
         uses: ./dice
