@@ -201,6 +201,7 @@ fn config_cmake(path: &Path) -> cmake::Config {
     let cmake_env_vars = vec![
         ("DICE_C_COMPILER", "CMAKE_C_COMPILER"),
         ("DICE_CXX_COMPILER", "CMAKE_CXX_COMPILER"),
+        ("DICE_MEMPOOL_SIZE", "DICE_MEMPOOL_SIZE"),
     ];
 
     cmake_env_vars

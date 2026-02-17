@@ -123,7 +123,7 @@ pub trait DiceEvent: Sized {
     /// # Safety
     ///
     /// The caller must ensure:
-    /// - ptr is a valid, properly aligned pointer to an initialized `Self`, or Null 
+    /// - ptr is a valid, properly aligned pointer to an initialized `Self`, or Null
     /// - The pointed-to data remains valid for lifetime `'a`
     /// - No mutable references to the data exist for lifetime `'a`
     /// - No other thread is concurrently writing to the data (no data races)
@@ -242,8 +242,7 @@ unsafe impl GlobalAlloc for MempoolAllocator {
          * - alignment must be power of two: Layout guarantees this
          * - size must be non-zero: GlobalAlloc contract requires layout.size() > 0
          */
-        let allocation = unsafe { raw::mempool_aligned_alloc(layout.align(), layout.size()) };
-        allocation as *mut u8
+        unsafe { raw::mempool_aligned_alloc(layout.align(), layout.size()) as *mut u8 }
     }
 
     /// Deallocate memory previously allocated by this allocator.
