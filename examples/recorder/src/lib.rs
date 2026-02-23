@@ -169,9 +169,9 @@ fn generic_record<T: DiceEvent>(meta: &mut Metadata) {
 subscribe!(
     Chain::CaptureBefore,
     9999,
-    |_event: &ThreadCreateEvent, meta| {
+    |_event: &PthreadCreateEvent, meta| {
         acquire_lock(&LOCKED);
-        generic_record::<ThreadCreateEvent>(meta);
+        generic_record::<PthreadCreateEvent>(meta);
         DiceResult::Ok
     }
 );

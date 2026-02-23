@@ -39,7 +39,7 @@ pub type PsCallbackF = Option<
     unsafe extern "C" fn(
         chain: Chain,
         ty: TypeId,
-        event: *const c_void,
+        event: *mut c_void,
         md: *mut Metadata,
     ) -> DiceResult,
 >;
@@ -217,19 +217,6 @@ unsafe extern "C" {
     ///
     /// A pointer to the allocated memory, or null on failure. The memory is uninitialized.
     pub fn mempool_alloc(size: libc::size_t) -> *mut libc::c_void;
-
-    /// Allocate memory from dice's mempool with given alignment
-    ///
-    /// # Safety
-    ///
-    /// - `alignment` must be a power of two
-    /// - `size` must be non-zero
-    /// - The returned pointer must be freed with [`mempool_free`]
-    ///
-    /// # Returns
-    ///
-    /// A pointer to the allocated memory, or null on failure. The memory is uninitialized.
-    pub fn mempool_aligned_alloc(alignment: usize, size: usize) -> *mut c_void;
 
     /// Free memory previously allocated from dice's mempool.
     ///

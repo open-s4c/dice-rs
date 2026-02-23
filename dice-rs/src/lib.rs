@@ -114,7 +114,7 @@ pub trait DiceEvent: Sized {
     ///
     /// Returns `Some(&Self)` for unit structs (marker events), `None` otherwise.
     /// The `#[dice_event(...)]` macro implements this automatically.
-    fn fallback<'a>() -> Option<&'a Self> {
+    fn fallback<'a>() -> Option<&'a mut Self> {
         None
     }
 
@@ -133,11 +133,11 @@ pub trait DiceEvent: Sized {
     /// - `Some(&Self)` if `ptr` is valid or fallback is available
     /// - `None` if `ptr` is null and no fallback exists
     #[inline]
-    unsafe fn from_raw<'a>(ptr: *const ()) -> Option<&'a Self> {
+    unsafe fn from_raw<'a>(ptr: *const ()) -> Option<&'a mut Self> {
         if ptr.is_null() {
             Self::fallback()
         } else {
-            let ptr = ptr as *const Self;
+            let ptr = ptr as *mut Self;
             debug_assert!(ptr.is_aligned(), "Event pointer must be properly aligned");
 
             /* SAFETY:
@@ -147,7 +147,7 @@ pub trait DiceEvent: Sized {
              * - aliasing: we create a shared reference; caller guarantees no mutable refs exist
              * - initialized: by the safety contract, the pointed-to data is properly initialized
              */
-            let reference = unsafe { &*ptr };
+            let reference = unsafe { &mut *ptr };
             Some(reference)
         }
     }
@@ -563,13 +563,13 @@ pub mod thread {
 /// ```
 #[macro_export]
 macro_rules! subscribe_scoped {
-    ($chain:expr, $prio:expr, |$e:ident: &$t:ty, $m:ident| $body:block) => {{
+    ($chain:expr, $prio:expr, |$e:ident: &mut $t:ty, $m:ident| $body:block) => {{
         // GUARD: This type annotation enforces compile-time safety:
         // - Prevents variable capture: fn pointers cannot capture locals, preventing use-after-free
         // - Enforces correct types/lifetimes: body must use exact types, preventing lifetime extension
         // The guard is never executed - it only triggers compile-time type checking.
-        let _guard: fn(&$t, &mut $crate::Metadata) -> $crate::DiceResult =
-            |$e: &$t, $m: &mut $crate::Metadata| $body;
+        let _guard: fn(&mut $t, &mut $crate::Metadata) -> $crate::DiceResult =
+            |$e: &mut $t, $m: &mut $crate::Metadata| $body;
 
         // Priorities 1-4 are reserved for dice internals
         assert!($prio > 4, "Priority must be greater than 4 (1-4 are reserved for dice internals)");
@@ -577,7 +577,7 @@ macro_rules! subscribe_scoped {
         extern "C" fn __trampoline(
             chain: $crate::Chain,
             _ty: $crate::TypeId,
-            event: *const core::ffi::c_void,
+            event: *mut core::ffi::c_void,
             md: *mut $crate::Metadata,
         ) -> $crate::DiceResult {
             /* SAFETY: DiceEvent::from_raw preconditions (from trait definition):
@@ -586,13 +586,13 @@ macro_rules! subscribe_scoped {
              * - no mutable refs exist: dice provides immutable event data to callbacks
              * - no concurrent writes: callback executes synchronously, dice doesn't modify during
              */
-            let Some(ev_ref) = (unsafe { <$t as $crate::DiceEvent>::from_raw(event as *const ()) }) else {
+            let Some(ev_ref) = (unsafe { <$t as $crate::DiceEvent>::from_raw(event as *mut ()) }) else {
                 return $crate::DiceResult::Invalid;
             };
 
             let __chain = chain;
 
-            let $e: &$t = ev_ref;
+            let $e: &mut $t = ev_ref;
             /* SAFETY: creating &mut Metadata from raw pointer:
              * - not dangling: dice guarantees md valid for callback duration
              * - aligned: dice provides properly aligned Metadata pointer
@@ -630,7 +630,7 @@ macro_rules! subscribe_scoped {
 /// `Once` ensures this only happens once, even in multithreaded applications.
 #[macro_export]
 macro_rules! subscribe {
-    ($chain:expr, $slot:expr, |$e:ident: &$t:ty, $m:ident| $body:block) => {
+    ($chain:expr, $slot:expr, |$e:ident: &mut $t:ty, $m:ident| $body:block) => {
         const _: () = {
             #[allow(non_snake_case)]
             #[::ctor::ctor]
@@ -639,7 +639,7 @@ macro_rules! subscribe {
                 static INIT: Once = Once::new();
 
                 INIT.call_once(|| {
-                    let _ = $crate::subscribe_scoped!($chain, $slot, |$e: &$t, $m| $body);
+                    let _ = $crate::subscribe_scoped!($chain, $slot, |$e: &mut $t, $m| $body);
                 });
             }
         };
@@ -659,5 +659,7 @@ macro_rules! init_dice_state {
             $crate::log::init($level);
         }
     };
-    () => { init_dice_state!(log_level: $crate::log::LogLevel::Debug); }
+    () => {
+        init_dice_state!(log_level: log::LevelFilter::Debug);
+    }
 }
