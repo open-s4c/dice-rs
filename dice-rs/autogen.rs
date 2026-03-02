@@ -195,14 +195,16 @@ pub fn create_single_header<P: AsRef<Path>>(dir: P, out: P) {
         .expect("Dice Headers exist locally");
     paths.sort();
 
-    for path in paths {
-        if path.extension().map_or(false, |s| s == "h") {
-            if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                writeln!(wrapper_content, "#include <dice/events/{}>", filename)
-                    .expect("Writing to String works");
-            }
-        }
-    }
+    paths.iter()
+        .filter(|path| path.extension().map_or(false, |s| s == "h"))
+        .map(|path| path.file_name().and_then(|s| s.to_str()))
+        .map(Option::into_iter)
+        .flatten()
+        .filter(|filename| *filename != "stacktrace.h")
+        .for_each(|filename| {
+            writeln!(wrapper_content, "#include <dice/events/{}>", filename)
+                .expect("Writing to String works");
+        });
     fs::write(&out, wrapper_content).expect("Failed to write wrapper.h");
 }
 
