@@ -123,7 +123,7 @@ pub trait DiceEvent: Sized {
     /// # Safety
     ///
     /// The caller must ensure:
-    /// - ptr is a valid, properly aligned pointer to an initialized `Self`, or Null 
+    /// - ptr is a valid, properly aligned pointer to an initialized `Self`, or Null
     /// - The pointed-to data remains valid for lifetime `'a`
     /// - No mutable references to the data exist for lifetime `'a`
     /// - No other thread is concurrently writing to the data (no data races)
@@ -300,9 +300,9 @@ unsafe impl GlobalAlloc for MempoolAllocator {
 /// relies on the invariants documented on [`Metadata`].
 #[cfg(feature = "dice-self")]
 pub mod thread {
-    use std::{marker::PhantomData, mem::MaybeUninit};
+    use std::marker::PhantomData;
 
-    use crate::{DiceThreadId, Metadata, raw};
+    use crate::{raw, DiceThreadId, Metadata};
 
     /// Get the current dice thread ID.
     ///
@@ -318,17 +318,6 @@ pub mod thread {
          *   and this function is only callable with &mut Metadata from a callback
          */
         unsafe { raw::thread::self_id(mt) }
-    }
-
-    /// Internal storage cell for TLS values.
-    ///
-    /// Tracks initialization state to support lazy initialization via `Default`.
-    /// Note: `T` does not have to be `repr(C)` as we perform the size and alignment
-    /// calculations on the Rust side.
-    #[repr(C)]
-    struct TlsCell<T> {
-        initialized: bool,
-        value: MaybeUninit<T>,
     }
 
     /// A key for accessing dice thread-local storage.
@@ -384,11 +373,9 @@ pub mod thread {
         /// - The TLS slot being unique per (thread, key) pair
         /// - Thread-locality prevents data races (only this thread accesses this slot)
         ///
-        /// **Important**: For newly allocated cells, the returned memory is uninitialized.
-        /// The caller (i.e., `get_mut`) must check `cell.initialized` before reading
-        /// `cell.value` to avoid undefined behavior from reading uninitialized memory.
+        /// Newly allocated values are initialized with `T::default()` before being stored in TLS.
         #[inline(always)]
-        unsafe fn cell_ptr(&self, mt: &mut Metadata) -> *mut TlsCell<T> {
+        unsafe fn cell_ptr(&self, mt: &mut Metadata) -> *mut T {
             // Use this key's address as the TLS slot identifier
             let key = self as *const TlsKey<T> as libc::uintptr_t;
 
@@ -396,25 +383,32 @@ pub mod thread {
              * - mt must be valid pointer to Metadata: mt is a mutable reference, guaranteed valid
              * Returns null if key not set, otherwise a valid pointer we previously stored.
              */
-            let raw = unsafe { raw::thread::self_tls_get(mt, key) as *mut TlsCell<T> };
+            let raw = unsafe { raw::thread::self_tls_get(mt, key) as *mut T };
             if !raw.is_null() {
                 return raw;
             }
 
-            // First access on this thread - allocate a new cell
-            let layout = std::alloc::Layout::new::<TlsCell<T>>();
+            // First access on this thread - allocate and initialize a new value.
+            let layout = std::alloc::Layout::new::<T>();
+            assert!(
+                layout.size() > 0,
+                "TlsKey does not support zero-sized value types"
+            );
             /* SAFETY: raw::mempool_aligned_alloc preconditions (from raw.rs):
              * - alignment must be power of two: Layout::new guarantees valid alignment
-             * - size must be non-zero: TlsCell<T> contains at least a bool, so size > 0
-             * Note: returned memory is uninitialized; caller must check cell.initialized
-             * before reading cell.value to avoid UB from reading uninitialized memory.
+             * - size must be non-zero: asserted above
              */
             let raw = unsafe { raw::mempool_aligned_alloc(layout.align(), layout.size()) };
-            let ptr = raw as *mut TlsCell<T>;
+            let ptr = raw as *mut T;
             debug_assert!(
                 !raw.is_null() && raw.is_aligned(),
                 "TLS allocation failed or misaligned"
             );
+
+            /* SAFETY: ptr points to writable allocation for one T and is initialized
+             * exactly once before publishing via self_tls_set.
+             */
+            unsafe { ptr.write(T::default()) };
 
             /* SAFETY: raw::thread::self_tls_set preconditions (from raw.rs):
              * - mt must be valid pointer to Metadata: mt is a mutable reference, guaranteed valid
@@ -467,25 +461,16 @@ pub mod thread {
              * - pointer valid while mt valid: Metadata lifetime bounds the cell lifetime
              * - thread-local: Metadata is !Send/!Sync, cannot escape thread
              */
-            let cell = unsafe { self.cell_ptr(mt) };
+            let ptr = unsafe { self.cell_ptr(mt) };
 
             /* SAFETY: creating &mut from raw pointer:
              * - not dangling: cell_ptr returns valid pointer, mt still valid
-             * - aligned: cell_ptr allocates with Layout::new::<TlsCell<T>>()
+             * - aligned: cell_ptr allocates with Layout::new::<T>()
              * - no data race: thread-local storage, Metadata is !Send/!Sync
              * - no aliasing: Metadata exclusivity prevents concurrent get_mut calls
-             * - initialized (struct): we only read .initialized field before full init
+             * - initialized: newly allocated values are written with T::default() in cell_ptr
              */
-            let cell = unsafe { &mut *cell };
-
-            // Lazy initialization on first access
-            if !cell.initialized {
-                cell.value = MaybeUninit::new(T::default());
-                cell.initialized = true;
-            }
-
-            // SAFETY: cell.initialized is true, so cell.value was written via MaybeUninit::new()
-            unsafe { cell.value.assume_init_mut() }
+            unsafe { &mut *ptr }
         }
     }
 
