@@ -231,6 +231,7 @@ pub fn generate() {
         .formatter(Formatter::Rustfmt)
         .ctypes_prefix("libc")
         .layout_tests(true)
+        .derive_debug(true)
         .generate()
         .expect("Unable to generate bindings");
 

@@ -83,7 +83,7 @@ pub fn dice_event(attr: TokenStream, item: TokenStream) -> TokenStream {
             impl #impl_generics DiceEvent for #ident #ty_generics #where_clause {
                 const ID: TypeId = (#id_expr) as TypeId;
 
-                fn fallback<'a>() -> ::core::option::Option<&'a mut Self> {
+                fn fallback_const<'a>() -> ::core::option::Option<&'a Self> {
                     ::core::option::Option::None
                 }
             }

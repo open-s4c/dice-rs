@@ -133,7 +133,7 @@ pub trait DiceEvent: Sized {
     /// - `Some(&Self)` if `ptr` is valid or fallback is available
     /// - `None` if `ptr` is null and no fallback exists
     #[inline]
-    unsafe fn from_raw<'a>(ptr: *const ()) -> Option<&'a mut Self> {
+    unsafe fn from_raw<'a>(ptr: *mut ()) -> Option<&'a mut Self> {
         if ptr.is_null() {
             Self::fallback()
         } else {
@@ -410,6 +410,7 @@ pub mod thread {
              */
             let raw = unsafe { raw::mempool_aligned_alloc(layout.align(), layout.size()) };
             let ptr = raw as *mut TlsCell<T>;
+            unsafe { (*ptr).initialized = false; }
             debug_assert!(
                 !raw.is_null() && raw.is_aligned(),
                 "TLS allocation failed or misaligned"
@@ -563,7 +564,7 @@ pub mod thread {
 /// ```
 #[macro_export]
 macro_rules! subscribe_scoped {
-    ($chain:expr, $prio:expr, |$e:ident: &mut $t:ty, $m:ident| $body:block) => {{
+    ($chain:expr, $prio:expr, |$e:ident: Option<&mut $t:ty>, $m:ident| $body:block) => {{
         // GUARD: This type annotation enforces compile-time safety:
         // - Prevents variable capture: fn pointers cannot capture locals, preventing use-after-free
         // - Enforces correct types/lifetimes: body must use exact types, preventing lifetime extension
@@ -586,13 +587,11 @@ macro_rules! subscribe_scoped {
              * - no mutable refs exist: dice provides immutable event data to callbacks
              * - no concurrent writes: callback executes synchronously, dice doesn't modify during
              */
-            let Some(ev_ref) = (unsafe { <$t as $crate::DiceEvent>::from_raw(event as *mut ()) }) else {
-                return $crate::DiceResult::Invalid;
-            };
+            let maybe_ev_ref = unsafe { <$t as $crate::DiceEvent>::from_raw(event as *mut ()) };
 
             let __chain = chain;
 
-            let $e: &mut $t = ev_ref;
+            let $e: Option<&mut $t> = maybe_ev_ref;
             /* SAFETY: creating &mut Metadata from raw pointer:
              * - not dangling: dice guarantees md valid for callback duration
              * - aligned: dice provides properly aligned Metadata pointer
@@ -630,7 +629,7 @@ macro_rules! subscribe_scoped {
 /// `Once` ensures this only happens once, even in multithreaded applications.
 #[macro_export]
 macro_rules! subscribe {
-    ($chain:expr, $slot:expr, |$e:ident: &mut $t:ty, $m:ident| $body:block) => {
+    ($chain:expr, $slot:expr, |$e:ident: Option<&mut $t:ty>, $m:ident| $body:block) => {
         const _: () = {
             #[allow(non_snake_case)]
             #[::ctor::ctor]
@@ -639,7 +638,7 @@ macro_rules! subscribe {
                 static INIT: Once = Once::new();
 
                 INIT.call_once(|| {
-                    let _ = $crate::subscribe_scoped!($chain, $slot, |$e: &mut $t, $m| $body);
+                    let _ = $crate::subscribe_scoped!($chain, $slot, |$e: Option<&mut $t>, $m| $body);
                 });
             }
         };

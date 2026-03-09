@@ -35,14 +35,13 @@ use libc::c_void;
 /// - Not unwind (panic) - this crosses an FFI boundary
 /// - Not store `md` or references derived from it beyond the callback's return
 /// - Handle null `event` pointers for marker events (events with no payload)
-pub type PsCallbackF = Option<
+pub type PsCallbackF =
     unsafe extern "C" fn(
         chain: Chain,
         ty: TypeId,
         event: *mut c_void,
         md: *mut Metadata,
-    ) -> DiceResult,
->;
+    ) -> DiceResult;
 
 #[link(name = "dice", kind = "static")]
 unsafe extern "C" {
@@ -64,7 +63,7 @@ unsafe extern "C" {
     /// # Returns
     ///
     /// Returns 0 on success, non-zero on failure.
-    pub fn ps_subscribe(chain: Chain, ty: TypeId, cb: PsCallbackF, prio: i32) -> i32;
+    pub fn ps_subscribe(chain: Chain, ty: TypeId, cb: Option<PsCallbackF>, prio: i32) -> i32;
 
     /// Publish an event to a dice chain.
     ///
