@@ -202,6 +202,7 @@ fn config_cmake(path: &Path) -> cmake::Config {
         ("DICE_C_COMPILER", "CMAKE_C_COMPILER"),
         ("DICE_CXX_COMPILER", "CMAKE_CXX_COMPILER"),
         ("DICE_MEMPOOL_SIZE", "DICE_MEMPOOL_SIZE"),
+        ("DICE_MEMSET", "DICE_MEMSET"),
     ];
 
     cmake_env_vars

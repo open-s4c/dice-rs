@@ -569,8 +569,8 @@ macro_rules! subscribe_scoped {
         // - Prevents variable capture: fn pointers cannot capture locals, preventing use-after-free
         // - Enforces correct types/lifetimes: body must use exact types, preventing lifetime extension
         // The guard is never executed - it only triggers compile-time type checking.
-        let _guard: fn(&mut $t, &mut $crate::Metadata) -> $crate::DiceResult =
-            |$e: &mut $t, $m: &mut $crate::Metadata| $body;
+        let _guard: fn(Option<&mut $t>, &mut $crate::Metadata) -> $crate::DiceResult =
+            |$e: Option<&mut $t>, $m: &mut $crate::Metadata| $body;
 
         // Priorities 1-4 are reserved for dice internals
         assert!($prio > 4, "Priority must be greater than 4 (1-4 are reserved for dice internals)");
