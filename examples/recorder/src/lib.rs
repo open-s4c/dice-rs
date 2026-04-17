@@ -138,7 +138,7 @@ impl Recorder {
     }
 }
 
-subscribe!(Chain::CaptureEvent, 9999, |_event: &SelfInitEvent, meta| {
+subscribe!(Chain::CaptureEvent, 9999, |_event: Option<&mut SelfInitEvent>, meta| {
     let thread_id = self_id(meta);
 
     if thread_id != 1 {
@@ -152,7 +152,7 @@ subscribe!(Chain::CaptureEvent, 9999, |_event: &SelfInitEvent, meta| {
     DiceResult::Ok
 });
 
-subscribe!(Chain::CaptureEvent, 9999, |_event: &SelfFiniEvent, meta| {
+subscribe!(Chain::CaptureEvent, 9999, |_event: Option<&mut SelfFiniEvent>, meta| {
     let thread_id = self_id(meta);
     RECORDER.with(meta, |rec| {
         rec.end();
@@ -169,20 +169,20 @@ fn generic_record<T: DiceEvent>(meta: &mut Metadata) {
 subscribe!(
     Chain::CaptureBefore,
     9999,
-    |_event: &PthreadCreateEvent, meta| {
+    |_event: Option<&mut PthreadCreateEvent>, meta| {
         acquire_lock(&LOCKED);
         generic_record::<PthreadCreateEvent>(meta);
         DiceResult::Ok
     }
 );
 
-subscribe!(Chain::CaptureBefore, 9999, |_event: &MaAreadEvent, meta| {
+subscribe!(Chain::CaptureBefore, 9999, |_event: Option<&mut MaAreadEvent>, meta| {
     acquire_lock(&LOCKED);
     generic_record::<MaAreadEvent>(meta);
     DiceResult::Ok
 });
 
-subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAreadEvent, meta| {
+subscribe!(Chain::CaptureAfter, 9999, |_event: Option<&mut MaAreadEvent>, meta| {
     release_lock(&LOCKED);
     DiceResult::Ok
 });
@@ -190,14 +190,14 @@ subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAreadEvent, meta| {
 subscribe!(
     Chain::CaptureBefore,
     9999,
-    |_event: &MaAwriteEvent, meta| {
+    |_event: Option<&mut MaAwriteEvent>, meta| {
         acquire_lock(&LOCKED);
         generic_record::<MaAwriteEvent>(meta);
         DiceResult::Ok
     }
 );
 
-subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAwriteEvent, meta| {
+subscribe!(Chain::CaptureAfter, 9999, |_event: Option<&mut MaAwriteEvent>, meta| {
     release_lock(&LOCKED);
     DiceResult::Ok
 });
@@ -205,7 +205,7 @@ subscribe!(Chain::CaptureAfter, 9999, |_event: &MaAwriteEvent, meta| {
 subscribe!(
     Chain::CaptureBefore,
     9999,
-    |_event: &MaCmpxchgEvent, meta| {
+    |_event: Option<&mut MaCmpxchgEvent>, meta| {
         acquire_lock(&LOCKED);
         generic_record::<MaCmpxchgEvent>(meta);
         DiceResult::Ok
@@ -215,19 +215,19 @@ subscribe!(
 subscribe!(
     Chain::CaptureAfter,
     9999,
-    |_event: &MaCmpxchgEvent, meta| {
+    |_event: Option<&mut MaCmpxchgEvent>, meta| {
         release_lock(&LOCKED);
         DiceResult::Ok
     }
 );
 
-subscribe!(Chain::CaptureBefore, 9999, |_event: &MallocEvent, meta| {
+subscribe!(Chain::CaptureBefore, 9999, |_event: Option<&mut MallocEvent>, meta| {
     acquire_lock(&LOCKED);
     generic_record::<MallocEvent>(meta);
     DiceResult::Ok
 });
 
-subscribe!(Chain::CaptureAfter, 9999, |_event: &MallocEvent, meta| {
+subscribe!(Chain::CaptureAfter, 9999, |_event: Option<&mut MallocEvent>, meta| {
     release_lock(&LOCKED);
     DiceResult::Ok
 });
