@@ -24,6 +24,8 @@ san-thread = []
 san-address = []
 san-undefined = []
 
+manual-link = []
+
 # Dice modules
 dice = []
 dice-box = ["dice"]

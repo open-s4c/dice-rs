@@ -43,7 +43,7 @@ pub type PsCallbackF =
         md: *mut Metadata,
     ) -> DiceResult;
 
-#[link(name = "dice", kind = "static")]
+#[cfg_attr(not(feature = "manual-link"), link(name = "dice", kind = "static"))]
 unsafe extern "C" {
     /// Subscribe a callback to a dice event chain.
     ///
@@ -122,7 +122,7 @@ pub mod thread {
     }
 
     use super::*;
-    #[link(name = "dice", kind = "static")]
+    #[cfg_attr(not(feature = "manual-link"), link(name = "dice", kind = "static"))]
     unsafe extern "C" {
         /// Get the dice thread ID for the current thread.
         ///
@@ -187,7 +187,7 @@ pub mod thread {
     }
 }
 
-#[link(name = "dice", kind = "static")]
+#[cfg_attr(not(feature = "manual-link"), link(name = "dice", kind = "static"))]
 unsafe extern "C" {
     /// Allocate memory from dice's mempool with specified alignment.
     ///
@@ -227,7 +227,7 @@ unsafe extern "C" {
     pub fn mempool_free(ptr: *mut libc::c_void);
 }
 
-#[link(name = "shim", kind = "static")]
+#[cfg_attr(not(feature = "manual-link"), link(name = "shim", kind = "static"))]
 unsafe extern "C" {
     /// Write a log message through dice's logging infrastructure.
     ///
