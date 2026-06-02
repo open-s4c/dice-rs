@@ -27,12 +27,15 @@ fn to_camel_case(s: &str) -> String {
 #[derive(Debug, Default)]
 struct GeneratorCallbacks {
     event_map: RefCell<HashMap<String, String>>,
+    known_constants: RefCell<HashSet<String>>,
 }
 
 impl ParseCallbacks for GeneratorCallbacks {
     /// Constants starting with EVENT_ should be treated as unsigned integers.
     fn int_macro(&self, name: &str, _value: i64) -> Option<IntKind> {
         if name.starts_with("EVENT_") {
+            // Record this constant as existing
+            self.known_constants.borrow_mut().insert(name.to_string());
             Some(IntKind::UInt)
         } else {
             None
@@ -57,11 +60,14 @@ impl ParseCallbacks for GeneratorCallbacks {
         // Generate Const Name: "ALLIGNED_ALLOC" -> "EVENT_ALLIGNED_ALLOC"
         let const_name = format!("EVENT_{}", base_name.to_uppercase());
 
-        self.event_map
-            .borrow_mut()
-            .insert(rust_name.clone(), const_name);
-
-        Some(rust_name)
+        // Only add mapping if constant exists
+        if self.known_constants.borrow().contains(&const_name) {
+            let rust_name = to_camel_case(base_name) + "Event";
+            self.event_map.borrow_mut().insert(rust_name.clone(), const_name);
+            Some(rust_name)
+        } else {
+            None
+        }
     }
 
     /// Add the custom #[dice_event(raw::...)] attribute onto generated structs.
