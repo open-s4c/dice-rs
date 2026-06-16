@@ -17,12 +17,12 @@ jobs:
       checks: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
       - name: Checkout Dice
         if: ${{ github.event_name == 'repository_dispatch' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: open-s4c/dice
           ref: ${{ github.event.client_payload.commit }}
