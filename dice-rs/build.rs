@@ -37,7 +37,10 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         "dice",
         "dice-box",
         "dice-cxa",
+        "dice-epoll",
+        "dice-eventfd",
         "dice-dispatch",
+        "dice-fcntl",
         "dice-malloc",
         "dice-memcpy",
         "dice-mman",
@@ -46,10 +49,15 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         "dice-pthread_create",
         "dice-pthread_mutex",
         "dice-pthread_rwlock",
+        "dice-random",
         "dice-self",
         "dice-sem",
+        "dice-socket",
+        "dice-syscall",
+        "dice-time",
         "dice-tsan",
-        "dice-random",
+        "dice-uio",
+        "dice-unistd",
     ];
 
     // filter enabled features

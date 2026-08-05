@@ -570,7 +570,7 @@ macro_rules! subscribe_scoped {
         // - Enforces correct types/lifetimes: body must use exact types, preventing lifetime extension
         // The guard is never executed - it only triggers compile-time type checking.
         let _guard: fn(Option<&mut $t>, &mut $crate::Metadata) -> $crate::DiceResult =
-            |$e: Option<&mut $t>, $m: &mut $crate::Metadata| $body;
+            |mut $e: Option<&mut $t>, $m: &mut $crate::Metadata| $body;
 
         // Priorities 1-4 are reserved for dice internals
         assert!($prio > 4, "Priority must be greater than 4 (1-4 are reserved for dice internals)");
@@ -591,7 +591,7 @@ macro_rules! subscribe_scoped {
 
             let __chain = chain;
 
-            let $e: Option<&mut $t> = maybe_ev_ref;
+            let mut $e: Option<&mut $t> = maybe_ev_ref;
             /* SAFETY: creating &mut Metadata from raw pointer:
              * - not dangling: dice guarantees md valid for callback duration
              * - aligned: dice provides properly aligned Metadata pointer
@@ -647,7 +647,6 @@ macro_rules! subscribe {
 
 /// Helper to initialize logging
 /// TODO: make it a struct
-#[macro_export]
 macro_rules! init_dice_state {
     (log_level: $level:expr) => {
         #[global_allocator]
@@ -659,6 +658,8 @@ macro_rules! init_dice_state {
         }
     };
     () => {
-        init_dice_state!(log_level: log::LevelFilter::Debug);
+        init_dice_state!(log_level: ::log::LevelFilter::Debug);
     }
 }
+
+init_dice_state!();
