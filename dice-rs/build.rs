@@ -48,6 +48,7 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         "dice-pthread_cond",
         "dice-pthread_create",
         "dice-pthread_mutex",
+        "dice-pthread_once",
         "dice-pthread_rwlock",
         "dice-random",
         "dice-self",
