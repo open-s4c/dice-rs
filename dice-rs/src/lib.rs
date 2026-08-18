@@ -629,11 +629,14 @@ macro_rules! subscribe_scoped {
 /// `Once` ensures this only happens once, even in multithreaded applications.
 #[macro_export]
 macro_rules! subscribe {
-    ($chain:expr, $slot:expr, |$e:ident: Option<&mut $t:ty>, $m:ident| $body:block) => {
+    ($chain:expr, $slot:expr, $cond:expr, |$e:ident: Option<&mut $t:ty>, $m:ident| $body:block) => {
         const _: () = {
             #[allow(non_snake_case)]
             #[::ctor::ctor]
             fn __dice_subscribe_ctor() {
+                if !$cond {
+                    return;
+                }
                 use std::sync::Once;
                 static INIT: Once = Once::new();
 
@@ -642,6 +645,10 @@ macro_rules! subscribe {
                 });
             }
         };
+    };
+
+    ($chain:expr, $slot:expr, |$e:ident: Option<&mut $t:ty>, $m:ident| $body:block) => {
+        $crate::subscribe!($chain, $slot, true, |$e: Option<&mut $t>, $m| $body);
     };
 }
 
