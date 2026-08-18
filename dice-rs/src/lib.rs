@@ -348,7 +348,7 @@ pub mod thread {
     /// *count += 1;
     /// ```
     pub struct TlsKey<T> {
-        _marker: PhantomData<T>,
+        _marker: PhantomData<fn() -> T>,
     }
 
     impl<T: Default> Default for TlsKey<T> {

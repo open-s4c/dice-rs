@@ -54,14 +54,12 @@ impl ParseCallbacks for GeneratorCallbacks {
         let caps = re.captures(item.name)?;
         let base_name = &caps["base"];
 
-        // Generate Struct Name: "aligned_alloc" -> "AlignedAllocEvent" (note: _event was removed before)
-        let rust_name = to_camel_case(base_name) + "Event";
-
         // Generate Const Name: "ALLIGNED_ALLOC" -> "EVENT_ALLIGNED_ALLOC"
         let const_name = format!("EVENT_{}", base_name.to_uppercase());
 
         // Only add mapping if constant exists
         if self.known_constants.borrow().contains(&const_name) {
+            // Generate Struct Name: "aligned_alloc" -> "AlignedAllocEvent" (note: _event was removed before)
             let rust_name = to_camel_case(base_name) + "Event";
             self.event_map.borrow_mut().insert(rust_name.clone(), const_name);
             Some(rust_name)
