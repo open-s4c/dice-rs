@@ -204,7 +204,6 @@ pub fn create_single_header<P: AsRef<Path>>(dir: P, out: P) {
         .map(|path| path.file_name().and_then(|s| s.to_str()))
         .map(Option::into_iter)
         .flatten()
-        .filter(|filename| *filename != "stacktrace.h")
         .for_each(|filename| {
             writeln!(wrapper_content, "#include <dice/events/{}>", filename)
                 .expect("Writing to String works");
