@@ -37,32 +37,19 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
         "dice",
         "dice-box",
         "dice-cxa",
-        "dice-epoll",
-        "dice-eventfd",
-        "dice-dirent",
         "dice-dispatch",
-        "dice-fcntl",
         "dice-malloc",
         "dice-memcpy",
         "dice-mman",
-        "dice-poll",
         "dice-pthread_cond",
         "dice-pthread_create",
-        "dice-pthread_detach",
-        "dice-pthread_key",
         "dice-pthread_mutex",
         "dice-pthread_once",
         "dice-pthread_rwlock",
-        "dice-random",
         "dice-self",
         "dice-sem",
-        "dice-socket",
         "dice-stacktrace",
-        "dice-syscall",
-        "dice-time",
         "dice-tsan",
-        "dice-uio",
-        "dice-unistd",
     ];
 
     // filter enabled features
@@ -72,7 +59,16 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
             env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_uppercase().replace('-', "_"))
                 .is_some()
         })
-        .map(|feature| feature.to_owned() + ".o")
+        .map(str::to_owned)
+        .chain(
+            env::var("DICE_MODULES")
+                .unwrap_or_default()
+                .split(';')
+                .map(str::trim)
+                .filter(|module| !module.is_empty())
+                .map(|module| format!("dice-{module}")),
+        )
+        .map(|feature| feature + ".o")
         .collect::<Vec<String>>();
 
     // clean cmake build
@@ -219,16 +215,26 @@ fn config_cmake(path: &Path) -> cmake::Config {
         ("DICE_CXX_COMPILER", "CMAKE_CXX_COMPILER"),
         ("DICE_MEMPOOL_SIZE", "DICE_MEMPOOL_SIZE"),
         ("DICE_MEMSET", "DICE_MEMSET"),
+        ("DICE_EXTENSION_DIRS", "DICE_EXTENSION_DIRS"),
+        ("DICE_MAX_TYPES", "DICE_MAX_TYPES"),
     ];
 
     cmake_env_vars
         .into_iter()
-        .flat_map(|(env_var, cmake_var)| {
+        .inspect(|(env_var, _)| println!("cargo:rerun-if-env-changed={}", env_var))
+        .flat_map(|(env_var, cmake_var)|
             env::var(env_var).map(|env_var_val| (env_var_val, cmake_var))
-        })
+        )
         .for_each(|(env_var_val, cmake_var)| {
             cfg.define(cmake_var, env_var_val);
         });
+
+    env::var("DICE_EXTENSION_DIRS")
+        .unwrap_or_default()
+        .split(';')
+        .map(str::trim)
+        .filter(|dir| !dir.is_empty())
+        .for_each(|dir| println!("cargo:rerun-if-changed={}", dir));
 
     cfg
 }
