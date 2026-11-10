@@ -40,7 +40,6 @@ dice-pthread_rwlock = ["dice"]
 dice-self = ["dice"]
 dice-sem = ["dice"]
 dice-tsan = ["dice"]
-dice-poll = ["dice"]
 dice-stacktrace = ["dice"]
 
 [dependencies]
