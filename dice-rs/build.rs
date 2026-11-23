@@ -22,7 +22,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err(format!("Dice Roll header not found: {}", header.display()).into());
     }
     autogen::generate(Some(&header));
+    build_roll_subscription_shim(&header)?;
     build_dice_plugin("shim")?;
+    Ok(())
+}
+
+/// The C shim is compiled against the same Roll header as the runtime. It
+/// passes DICE_CONFIG_ID to the strict ABI subscription entry point, avoiding
+/// cross-configuration subscriptions from Rust.
+fn build_roll_subscription_shim(header: &Path) -> Result<(), Box<dyn Error>> {
+    let manifest_dir = get_manifest_dir();
+    let dice_src = manifest_dir.join("..").join("dice");
+    cc::Build::new()
+        .file(manifest_dir.join("roll_subscription.c"))
+        .include(header.parent().ok_or("missing Roll header directory")?)
+        .include(dice_src.join("include"))
+        .include(dice_src.join("deps").join("libvsync").join("include"))
+        .define("_GNU_SOURCE", None)
+        .flag_if_supported("-std=c11")
+        .compile("dice_roll_subscription");
+    println!("cargo:rerun-if-changed=roll_subscription.c");
     Ok(())
 }
 

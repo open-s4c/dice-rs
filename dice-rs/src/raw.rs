@@ -63,7 +63,9 @@ unsafe extern "C" {
     /// # Returns
     ///
     /// Returns 0 on success, non-zero on failure.
-    pub fn ps_subscribe(chain: Chain, ty: TypeId, cb: Option<PsCallbackF>, prio: i32) -> i32;
+    /// Config-checked subscription provided by the C shim compiled with the
+    /// generated Roll header. The shim invokes dice_subscribe_abi(DICE_CONFIG_ID,...).
+    pub fn dice_rs_subscribe(chain: Chain, ty: TypeId, cb: Option<PsCallbackF>, prio: i32) -> i32;
 
     /// Publish an event to a dice chain.
     ///

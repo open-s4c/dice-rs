@@ -612,7 +612,7 @@ macro_rules! subscribe_scoped {
          * - prio > 4: enforced by assert above
          */
         unsafe {
-            $crate::raw::ps_subscribe(
+            $crate::raw::dice_rs_subscribe(
                 $chain,
                 <$t as $crate::DiceEvent>::ID,
                 Some(__trampoline),
