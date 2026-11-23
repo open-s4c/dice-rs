@@ -13,10 +13,16 @@ use walkdir::{DirEntry, WalkDir};
 mod autogen;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    autogen::generate();
-    if !env::var("CARGO_FEATURE_MANUAL_LINK").is_ok() {
+    // Bindings must see the generated Roll IDs, so build before bindgen.
+    let roll_header = if env::var_os("CARGO_FEATURE_MANUAL_LINK").is_some() {
+        None
+    } else if env::var_os("DICE_ROLL_CONFIG").is_some() {
+        Some(build_rolled_dice()?)
+    } else {
         build_dice()?;
-    }
+        None
+    };
+    autogen::generate(roll_header.as_deref());
     build_dice_plugin("shim")?;
     Ok(())
 }
@@ -164,6 +170,100 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed={}", dice_src.display());
 
     Ok(())
+}
+
+/// Build the configured Dice core without archiving legacy dispatch objects.
+fn build_rolled_dice() -> Result<PathBuf, Box<dyn Error>> {
+    let manifest_dir = get_manifest_dir();
+    let dice_src = manifest_dir.join("..").join("dice");
+    let config = PathBuf::from(env::var("DICE_ROLL_CONFIG")?);
+    if !config.exists() {
+        return Err(format!("DICE_ROLL_CONFIG does not exist: {}", config.display()).into());
+    }
+    let config = config.canonicalize()?;
+    for name in ["DICE_ROLL_CONFIG", "DICE_ROLL_IMPORT_PATHS", "DICE_MODULES"] {
+        println!("cargo:rerun-if-env-changed={name}");
+    }
+    println!("cargo:rerun-if-changed={}", config.display());
+
+    let mut modules = Vec::<String>::new();
+    for module in [
+        "box", "cxa", "malloc", "memcpy", "mman", "pthread_cond",
+        "pthread_create", "pthread_mutex", "pthread_rwlock", "self",
+        "sem", "stacktrace", "tsan",
+    ] {
+        let feature = format!("CARGO_FEATURE_DICE_{}", module.to_uppercase());
+        if env::var_os(feature).is_some() {
+            modules.push(module.to_string());
+        }
+    }
+    for module in env::var("DICE_MODULES").unwrap_or_default().split(';') {
+        let module = module.trim().trim_start_matches("dice-");
+        if !module.is_empty() && !modules.iter().any(|value| value == module) {
+            modules.push(module.to_string());
+        }
+    }
+    if modules.is_empty() {
+        return Err("Dice Roll requires at least one interceptor module".into());
+    }
+    let mut cfg = config_cmake(&dice_src);
+    cfg.define("DICE_ROLL_CONFIG", config.to_string_lossy().as_ref());
+    cfg.define("DICE_ROLL_MODULES", modules.join(";"));
+    if let Ok(paths) = env::var("DICE_ROLL_IMPORT_PATHS") {
+        cfg.define("DICE_ROLL_IMPORT_PATHS", paths);
+    }
+    let build_root = cfg.build_target("dice-roll-runtime").build().join("build");
+    let header = build_root.join("dice-roll-runtime-dice").join("dice.h");
+    if !header.is_file() {
+        return Err(format!("Dice Roll header was not generated: {}", header.display()).into());
+    }
+    let mut paths: Vec<PathBuf> = WalkDir::new(&build_root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_file()
+                && entry.path().extension().is_some_and(|ext| ext == "o")
+                && entry.path().to_string_lossy().contains("CMakeFiles/dice-roll-runtime.dir/")
+        })
+        .map(DirEntry::into_path)
+        .collect();
+    paths.sort();
+    if paths.is_empty() {
+        return Err("Dice Roll produced no runtime object files".into());
+    }
+    let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    let lib_dir = out_dir.join("lib");
+    fs::create_dir_all(&lib_dir)?;
+    let archive = File::create(lib_dir.join("libdice.a"))?;
+    let names = paths.iter()
+        .map(|p| p.file_name().expect("object filename").as_encoded_bytes().to_vec())
+        .collect();
+    let mut ar = GnuBuilder::new(archive, names);
+    for path in paths {
+        ar.append_path(path)?;
+    }
+    let status = Command::new("ranlib")
+        .arg(lib_dir.join("libdice.a"))
+        .status()?;
+    if !status.success() {
+        return Err("ranlib failed for the rolled Dice archive".into());
+    }
+    println!("cargo:rustc-link-search={}", lib_dir.display());
+
+    let tsano_root = cfg.build_target("tsano").build();
+    let tsano = WalkDir::new(tsano_root).into_iter()
+        .filter_map(Result::ok)
+        .find(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            name == "libtsano.so" || name == "libtsano.dylib"
+        })
+        .ok_or("Could not locate the built libtsano shared library")?;
+    fs::copy(
+        tsano.path(),
+        out_dir.join("..").join("..").join("..").join(tsano.file_name()),
+    )?;
+    println!("cargo:rerun-if-changed={}", dice_src.display());
+    Ok(header)
 }
 
 fn config_cmake(path: &Path) -> cmake::Config {

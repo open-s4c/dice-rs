@@ -393,6 +393,7 @@ fn extension_dirs() -> Vec<PathBuf> {
 pub fn create_single_header(
     event_dirs: &[PathBuf],
     out: &Path,
+    roll_header: Option<&Path>,
 ) {
     let mut paths = Vec::new();
 
@@ -431,6 +432,10 @@ pub fn create_single_header(
         String::from(
             "// Auto-generated wrapper\n",
         );
+    if let Some(header) = roll_header {
+        writeln!(wrapper_content, "#include \"{}\"", header.display())
+            .expect("Writing to String works");
+    }
 
     for path in paths {
         writeln!(
@@ -450,7 +455,7 @@ pub fn create_single_header(
         );
 }
 
-pub fn generate() {
+pub fn generate(roll_header: Option<&Path>) {
     let manifest_dir =
         get_manifest_dir();
 
@@ -537,6 +542,7 @@ pub fn generate() {
     create_single_header(
         &event_dirs,
         &wrapper_path,
+        roll_header,
     );
 
     let mut builder =
