@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use dice_rs::{
-    Chain, DiceEvent, DiceResult, DiceThreadId, Metadata, TypeId, events::*, init_dice_state,
+    Chain, DiceEvent, DiceResult, DiceThreadId, Metadata, TypeId, events::*,
     subscribe, thread::*, tls_key,
 };
 use std::sync::atomic::Ordering;
@@ -45,10 +45,6 @@ struct Recorder {
     thread_id: Option<DiceThreadId>,
     order: Vec<usize>,
     ids: Vec<TypeId>,
-}
-
-init_dice_state! {
-    log_level: log::LevelFilter::Debug
 }
 
 tls_key!(RECORDER: Recorder);

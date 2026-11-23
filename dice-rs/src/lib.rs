@@ -44,12 +44,12 @@ pub type DiceThreadId = u64;
 #[repr(u16)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Chain {
-    InterceptEvent = 1,
-    InterceptBefore = 2,
-    InterceptAfter = 3,
-    CaptureEvent = 4,
-    CaptureBefore = 5,
-    CaptureAfter = 6,
+    InterceptEvent = events::raw::CHAIN_INTERCEPT_EVENT,
+    InterceptBefore = events::raw::CHAIN_INTERCEPT_BEFORE,
+    InterceptAfter = events::raw::CHAIN_INTERCEPT_AFTER,
+    CaptureEvent = events::raw::CHAIN_CAPTURE_EVENT,
+    CaptureBefore = events::raw::CHAIN_CAPTURE_BEFORE,
+    CaptureAfter = events::raw::CHAIN_CAPTURE_AFTER,
 }
 
 /// Result codes returned from dice callbacks.
@@ -60,8 +60,7 @@ pub enum Chain {
 pub enum DiceResult {
     Ok = 0,
     StopChain = 1,
-    DropEvent = 2,
-    HandlerOff = 3,
+    HandlerOff = 2,
     Invalid = -1,
     Error = -2,
 }
@@ -613,7 +612,7 @@ macro_rules! subscribe_scoped {
          * - prio > 4: enforced by assert above
          */
         unsafe {
-            $crate::raw::ps_subscribe(
+            $crate::raw::dice_rs_subscribe(
                 $chain,
                 <$t as $crate::DiceEvent>::ID,
                 Some(__trampoline),

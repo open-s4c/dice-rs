@@ -1,0 +1,13 @@
+; Dice Roll default configuration for standalone dice-rs.
+(import (dice self))
+(import (dice pthread_create))
+(import (dice malloc))
+(import (dice memcpy))
+(import (dice mman))
+(import (dice pthread_cond))
+(import (dice pthread_mutex))
+(import (dice pthread_rwlock))
+(import (dice sem))
+(import (dice cxa))
+(import (dice tsan))
+(import (dice stacktrace))
