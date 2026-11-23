@@ -337,7 +337,7 @@ use dice_derive::dice_event;
 
 /// Raw event constants from Dice and Dice extensions.
 pub mod raw {{
-    use crate::{TypeId, ChainId};
+    use crate::{{TypeId, ChainId}};
 {}}}
 
 {}
