@@ -485,8 +485,13 @@ pub fn generate(roll_header: Option<&Path>) {
     let mut event_dirs =
         vec![dice_events];
 
+    // The generated Roll header includes Dice's pubsub/logging interfaces,
+    // which depend on the vendored libvsync headers.
+    let vsync_include = manifest_dir
+        .join("..").join("dice").join("deps")
+        .join("libvsync").join("include");
     let mut include_dirs =
-        vec![dice_include];
+        vec![dice_include, vsync_include];
 
     // Add externally owned Dice extensions.
     //
