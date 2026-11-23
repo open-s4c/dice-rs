@@ -50,7 +50,7 @@ impl ParseCallbacks for GeneratorCallbacks {
         name: &str,
         _value: i64,
     ) -> Option<IntKind> {
-        if name.starts_with("EVENT_") {
+        if name.starts_with("EVENT_") || name.starts_with("CHAIN_") {
             self.known_constants
                 .borrow_mut()
                 .insert(name.to_string());
@@ -148,7 +148,7 @@ fn special_event_payload(
 /// Post-processes bindgen output:
 ///
 /// - moves layout tests to the bottom
-/// - moves EVENT_* constants into `raw`
+/// - moves EVENT_* and CHAIN_* constants into `raw`
 /// - gives EVENT_* constants TypeId type
 /// - renames *_event structs
 /// - attaches DiceEvent implementations
@@ -162,7 +162,7 @@ fn transform_bindings(src: &str) -> String {
     //
     // pub const EVENT_FOO: u32 = 1;
     let const_re = Regex::new(
-        r"(?m)^\s*pub\s+const\s+(?<fullname>EVENT_(?<name>\w+))\s*:.*?=\s*(?<value>.*?)\s*;\s*$",
+        r"(?m)^\s*pub\s+const\s+(?<fullname>(?<kind>EVENT|CHAIN)_(?<name>\w+))\s*:.*?=\s*(?<value>.*?)\s*;\s*$",
     )
         .expect("create valid regex");
 
@@ -211,16 +211,20 @@ fn transform_bindings(src: &str) -> String {
 
                 let value =
                     &caps["value"];
+                let kind = &caps["kind"];
 
-                found_constants.push((
-                    full_name.to_string(),
-                    base_name.to_string(),
-                ));
+                if kind == "EVENT" {
+                    found_constants.push((
+                        full_name.to_string(),
+                        base_name.to_string(),
+                    ));
+                }
 
                 writeln!(
                     raw_body,
-                    "    pub const {}: TypeId = {};",
+                    "    pub const {}: {} = {};",
                     full_name,
+                    if kind == "EVENT" { "TypeId" } else { "ChainId" },
                     value,
                 )
                     .expect("Writing to String works");
@@ -333,7 +337,7 @@ use dice_derive::dice_event;
 
 /// Raw event constants from Dice and Dice extensions.
 pub mod raw {{
-    use crate::TypeId;
+    use crate::{TypeId, ChainId};
 {}}}
 
 {}
@@ -557,7 +561,7 @@ pub fn generate(roll_header: Option<&Path>) {
                 ),
             )
             .allowlist_type(".*_event")
-            .allowlist_var("EVENT_.*")
+            .allowlist_var("(EVENT|CHAIN)_.*")
             .formatter(
                 Formatter::Rustfmt,
             )

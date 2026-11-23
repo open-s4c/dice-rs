@@ -2,7 +2,6 @@ use ar::GnuBuilder;
 use std::{
     env,
     error::Error,
-    fmt,
     fs::{self, File},
     path::Path,
     path::PathBuf,
@@ -13,162 +12,17 @@ use walkdir::{DirEntry, WalkDir};
 mod autogen;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Bindings must see the generated Roll IDs, so build before bindgen.
-    let roll_header = if env::var_os("CARGO_FEATURE_MANUAL_LINK").is_some() {
-        None
-    } else if env::var_os("DICE_ROLL_CONFIG").is_some() {
-        Some(build_rolled_dice()?)
+    // C compilation and Rust bindgen must consume the same Roll header.
+    let header = if env::var_os("CARGO_FEATURE_MANUAL_LINK").is_some() {
+        PathBuf::from(env::var("DICE_ROLL_HEADER")?)
     } else {
-        build_dice()?;
-        None
+        build_rolled_dice()?
     };
-    autogen::generate(roll_header.as_deref());
-    build_dice_plugin("shim")?;
-    Ok(())
-}
-
-fn build_dice() -> Result<(), Box<dyn Error>> {
-    let manifest_dir = get_manifest_dir();
-    let dice_src = manifest_dir.join("..").join("dice");
-
-    let mut cfg = config_cmake(&dice_src);
-
-    let build_path = env::var("OUT_DIR").expect("OUT_DIR must be set by Cargo");
-    let lib_path = Path::new(&build_path).join("lib");
-    let dice_path = lib_path.join("libdice.a");
-
-    fs::create_dir_all(&lib_path)?;
-
-    let object_features = vec![
-        "dice",
-        "dice-box",
-        "dice-cxa",
-        "dice-dispatch",
-        "dice-malloc",
-        "dice-memcpy",
-        "dice-mman",
-        "dice-pthread_cond",
-        "dice-pthread_create",
-        "dice-pthread_mutex",
-        "dice-pthread_once",
-        "dice-pthread_rwlock",
-        "dice-self",
-        "dice-sem",
-        "dice-stacktrace",
-        "dice-tsan",
-    ];
-
-    // filter enabled features
-    let object_targets = object_features
-        .into_iter()
-        .filter(|feature| {
-            env::var_os("CARGO_FEATURE_".to_owned() + &*feature.to_uppercase().replace('-', "_"))
-                .is_some()
-        })
-        .map(str::to_owned)
-        .chain(
-            env::var("DICE_MODULES")
-                .unwrap_or_default()
-                .split(';')
-                .map(str::trim)
-                .filter(|module| !module.is_empty())
-                .map(|module| format!("dice-{module}")),
-        )
-        .map(|feature| feature + ".o")
-        .collect::<Vec<String>>();
-
-    // clean cmake build
-    cfg.build_target("clean").build();
-
-    // build all cmake targets and get the cmake directory if any built
-    let mut maybe_cmake_out_dir = None;
-    for target in object_targets {
-        let cmake_out_dir = cfg.build_target(&target).build();
-        assert!(
-            maybe_cmake_out_dir
-                .into_iter()
-                .all(|old_cmake_out_dir| old_cmake_out_dir == cmake_out_dir)
-        );
-        maybe_cmake_out_dir = Some(cfg.build_target(&target).build());
+    if !header.is_file() {
+        return Err(format!("Dice Roll header not found: {}", header.display()).into());
     }
-
-    let dependency_modules = ["tmplr"];
-
-    // find all object file paths in cmake build directory
-    let object_paths: Vec<PathBuf> = maybe_cmake_out_dir
-        .map(|dst| dst.join("build"))
-        .map(WalkDir::new)
-        .into_iter()
-        .flatten()
-        .map(|maybe_entry| maybe_entry.map(DirEntry::into_path))
-        .filter(|maybe_path| {
-            maybe_path.iter().all(|path| {
-                path.extension().into_iter().any(|ext| ext == "o")
-                    & path.file_name().into_iter().any(|filename| {
-                        filename.to_str().into_iter().any(|filename_str| {
-                            dependency_modules.iter().all(|dependency_module| {
-                                !filename_str.starts_with(dependency_module)
-                            })
-                        })
-                    })
-            })
-        })
-        .collect::<Result<_, _>>()?;
-
-    // get object file names
-    let object_file_names = object_paths
-        .iter()
-        .map(|path| {
-            path.file_name()
-                .expect(
-                    "object paths are filtered by extension which requires filename to be present",
-                )
-                .as_encoded_bytes()
-                .to_vec()
-        })
-        .collect();
-
-    // pack object files into static library
-    let dice_file = File::create(&dice_path)?;
-
-    let mut builder = GnuBuilder::new(dice_file, object_file_names);
-
-    object_paths
-        .into_iter()
-        .map(|object| builder.append_path(object))
-        .reduce(Result::and)
-        .unwrap_or(Ok(()))?;
-
-    // add symbol index
-    Command::new("ranlib").arg(&dice_path).status()?;
-
-    let output_dir = Path::new(&build_path)
-        .join("..")
-        .join("..")
-        .join("..")
-        .join("libtsano.so");
-
-    // build libtsano.o and copy it to the root output directory
-    let _ = WalkDir::new(cfg.build_target("tsano").build())
-        .into_iter()
-        .find(|maybe_entry| {
-            maybe_entry.iter().all(|entry| {
-                entry
-                    .file_name()
-                    .to_str()
-                    .into_iter()
-                    .any(|name| name == "libtsano.so" || name == "libtsano.dylib")
-            })
-        })
-        .ok_or_else(|| FileNotFoundError {
-            filename: "libtsano.so".to_string(),
-        })?
-        .map(DirEntry::into_path)
-        .map(|path| fs::copy(path, &output_dir))?;
-
-    println!("cargo:rustc-link-search={}", lib_path.display());
-    println!("cargo:rerun-if-changed={}", dice_src.display());
-
+    autogen::generate(Some(&header));
+    build_dice_plugin("shim")?;
     Ok(())
 }
 
@@ -176,7 +30,9 @@ fn build_dice() -> Result<(), Box<dyn Error>> {
 fn build_rolled_dice() -> Result<PathBuf, Box<dyn Error>> {
     let manifest_dir = get_manifest_dir();
     let dice_src = manifest_dir.join("..").join("dice");
-    let config = PathBuf::from(env::var("DICE_ROLL_CONFIG")?);
+    let config = env::var_os("DICE_ROLL_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| manifest_dir.join("roll.dice"));
     if !config.exists() {
         return Err(format!("DICE_ROLL_CONFIG does not exist: {}", config.display()).into());
     }
@@ -188,7 +44,7 @@ fn build_rolled_dice() -> Result<PathBuf, Box<dyn Error>> {
 
     let mut modules = Vec::<String>::new();
     for module in [
-        "box", "cxa", "malloc", "memcpy", "mman", "pthread_cond",
+        "cxa", "malloc", "memcpy", "mman", "pthread_cond",
         "pthread_create", "pthread_mutex", "pthread_rwlock", "self",
         "sem", "stacktrace", "tsan",
     ] {
@@ -204,7 +60,8 @@ fn build_rolled_dice() -> Result<PathBuf, Box<dyn Error>> {
         }
     }
     if modules.is_empty() {
-        return Err("Dice Roll requires at least one interceptor module".into());
+        // Default Cargo feature has no modules; self yields a minimal core.
+        modules.push("self".to_string());
     }
     let mut cfg = config_cmake(&dice_src);
     cfg.define("DICE_ROLL_CONFIG", config.to_string_lossy().as_ref());
@@ -316,7 +173,6 @@ fn config_cmake(path: &Path) -> cmake::Config {
         ("DICE_MEMPOOL_SIZE", "DICE_MEMPOOL_SIZE"),
         ("DICE_MEMSET", "DICE_MEMSET"),
         ("DICE_EXTENSION_DIRS", "DICE_EXTENSION_DIRS"),
-        ("DICE_MAX_TYPES", "DICE_MAX_TYPES"),
     ];
 
     cmake_env_vars
@@ -366,16 +222,3 @@ fn build_dice_plugin(plugin_name: &str) -> Result<(), Box<dyn Error>> {
 pub fn get_manifest_dir() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("Cargo sets this environment variable"))
 }
-
-#[derive(Debug, Clone)]
-struct FileNotFoundError {
-    filename: String,
-}
-
-impl fmt::Display for FileNotFoundError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "file not found: {}", self.filename)
-    }
-}
-
-impl Error for FileNotFoundError {}
